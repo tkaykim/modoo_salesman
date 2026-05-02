@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Plus, Minus, Trash2, Search, ShoppingCart, Tag, Check, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
-import { useProducts, type ProductRow } from '@/hooks/useProducts';
+import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts';
 import { usePrintMethods } from '@/hooks/usePrintMethods';
 import { useMyCoupons } from '@/hooks/useMyCoupons';
 import { useMyTeams } from '@/hooks/useMyTeams';
@@ -125,7 +125,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
     return map[user?.grade ?? 'LV0'] ?? 0.05;
   })();
 
-  const filteredProducts = products.filter((p) => p.title.toLowerCase().includes(productSearch.toLowerCase()));
+  const filteredProducts = products.filter((p) => matchProduct(p, productSearch));
 
   const addItemFromProduct = (p: ProductRow) => {
     const sizes: OrderVariant[] = (p.size_options ?? []).map((s) => ({
@@ -647,8 +647,9 @@ function ProductPicker({
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="제품명 검색..."
+            placeholder="제품명 · 제조사 · 코드 검색..."
             className="flex-1 bg-transparent outline-none text-sm"
+            autoFocus
           />
         </div>
       </div>
@@ -673,10 +674,41 @@ function ProductPicker({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-gray-900 truncate">{p.title}</div>
-                  <div className="text-[11px] text-gray-500 font-mono">{fmt(Number(p.base_price) || 0)}</div>
+                  {(p.manufacturer_name || p.product_code) && (
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      {p.manufacturer_name && (
+                        <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
+                          {p.manufacturer_name}
+                        </span>
+                      )}
+                      {p.product_code && (
+                        <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                          {p.product_code}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-[11px] text-gray-500 font-mono mt-0.5">{fmt(Number(p.base_price) || 0)}</div>
                   {p.size_options && p.size_options.length > 0 && (
                     <div className="text-[10px] text-gray-400 mt-0.5">
                       사이즈 {p.size_options.map((s) => s.label).join(', ')}
+                    </div>
+                  )}
+                  {p.keywords && p.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.keywords.slice(0, 4).map((kw) => (
+                        <span
+                          key={kw}
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700"
+                        >
+                          #{kw}
+                        </span>
+                      ))}
+                      {p.keywords.length > 4 && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          +{p.keywords.length - 4}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

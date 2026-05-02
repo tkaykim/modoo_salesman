@@ -677,9 +677,10 @@ function AssetThumb({
 // =====================================================================
 function ShareLinkTab({ team }: { team: Team }) {
   const [copied, setCopied] = useState(false);
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin.replace('salesman.', '').replace('sales.', '') : '';
+  // 고객용 앱 도메인 = NEXT_PUBLIC_APP_BASE_URL (Vercel env). default: modoouniform.com
+  const customerAppBase = (process.env.NEXT_PUBLIC_APP_BASE_URL || 'https://modoouniform.com').replace(/\/$/, '');
   const slug = team.slug || team.shareToken;
-  const link = slug ? `${baseUrl.includes('localhost') ? 'https://modoogoods.com' : baseUrl}/mall/${slug}` : null;
+  const link = slug ? `${customerAppBase}/mall/${slug}` : null;
 
   const copyLink = async () => {
     if (!link) return;

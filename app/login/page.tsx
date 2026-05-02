@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
+import { Icon } from '@/components/ui';
 
 function getSafeInternalRedirect(raw: string | null): string {
   if (!raw || typeof raw !== 'string') return '/';
@@ -50,24 +51,56 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-brand-50 to-brand-100 px-5">
+    <div
+      className="min-h-[100dvh] flex flex-col items-center justify-center px-5"
+      style={{
+        background:
+          'radial-gradient(circle at 30% 20%, rgba(0,82,204,0.08) 0%, transparent 60%), radial-gradient(circle at 70% 80%, rgba(0,82,204,0.04) 0%, transparent 60%), var(--color-surface)',
+      }}
+    >
       <div className="w-full max-w-sm">
+        {/* Brand mark */}
         <div className="text-center mb-8">
-          <div className="text-4xl mb-3">👕</div>
-          <h1 className="text-xl font-bold text-gray-900">모두의 유니폼</h1>
-          <p className="text-sm text-gray-500 mt-1">영업사원 전용 앱</p>
+          <div
+            className="w-16 h-16 mx-auto mb-4 rounded-[20px] flex items-center justify-center"
+            style={{
+              background: 'var(--color-brand-500)',
+              boxShadow: 'var(--shadow-cta)',
+            }}
+          >
+            <Icon name="sparkle" size={28} color="white" strokeWidth={2.2} />
+          </div>
+          <h1 className="text-[20px] font-black text-[var(--color-ink)] tracking-tight">
+            모두의 유니폼
+          </h1>
+          <p className="text-[12px] text-[var(--color-muted)] mt-1 font-medium">
+            영업사원 전용 앱
+          </p>
         </div>
 
-        <div className="bg-white shadow-lg rounded-2xl p-6 border border-gray-200">
-          {errorParam === 'role' && (
-            <div className="rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2 text-xs text-yellow-800 mb-4">
-              영업사원 계정이 아닙니다. 본사에 문의해주세요.
+        <div
+          className="bg-[var(--color-surface)] rounded-[20px] p-6 border border-[var(--color-hairline-soft)]"
+          style={{ boxShadow: '0 4px 14px rgba(14,17,22,0.06)' }}
+        >
+          {(errorParam === 'role' || errorParam === 'not_salesman') && (
+            <div className="rounded-[10px] bg-[var(--color-warn)]/10 border border-[var(--color-warn)]/30 px-3 py-2 text-[12px] text-[var(--color-warn)] mb-4 flex items-start gap-2">
+              <Icon name="alert" size={14} color="var(--color-warn)" />
+              <span className="flex-1">영업사원 계정이 아닙니다. 본사에 문의해주세요.</span>
+            </div>
+          )}
+          {errorParam === 'dormant' && (
+            <div className="rounded-[10px] bg-[var(--color-warn)]/10 border border-[var(--color-warn)]/30 px-3 py-2 text-[12px] text-[var(--color-warn)] mb-4 flex items-start gap-2">
+              <Icon name="alert" size={14} color="var(--color-warn)" />
+              <span className="flex-1">휴면 상태 계정입니다. 본사에 활성화 요청을 해주세요.</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="email">
+              <label
+                className="block text-[11px] font-bold text-[var(--color-muted)] mb-1.5"
+                htmlFor="email"
+              >
                 이메일
               </label>
               <input
@@ -78,13 +111,16 @@ function LoginForm() {
                 inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
+                className="w-full rounded-[10px] border border-[var(--color-hairline)] px-3 py-2.5 text-[15px] focus:outline-none focus:border-[var(--color-brand-500)]"
                 placeholder="example@modoogoods.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="password">
+              <label
+                className="block text-[11px] font-bold text-[var(--color-muted)] mb-1.5"
+                htmlFor="password"
+              >
                 비밀번호
               </label>
               <input
@@ -94,13 +130,13 @@ function LoginForm() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
+                className="w-full rounded-[10px] border border-[var(--color-hairline)] px-3 py-2.5 text-[15px] focus:outline-none focus:border-[var(--color-brand-500)]"
                 placeholder="비밀번호"
               />
             </div>
 
             {errorMessage && (
-              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+              <div className="rounded-[10px] bg-[var(--color-err)]/10 border border-[var(--color-err)]/30 px-3 py-2 text-[12px] text-[var(--color-err)]">
                 {errorMessage}
               </div>
             )}
@@ -108,14 +144,15 @@ function LoginForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-lg bg-brand-500 px-3 py-3 text-white text-base font-bold hover:bg-brand-600 active:bg-brand-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full rounded-[14px] bg-[var(--color-brand-500)] px-3 py-3 text-white text-[15px] font-bold active:bg-[var(--color-brand-600)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              style={!isSubmitting ? { boxShadow: 'var(--shadow-cta)' } : undefined}
             >
               {isSubmitting ? '로그인 중...' : '로그인'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-[11px] text-gray-500 mt-6">
+        <p className="text-center text-[11px] text-[var(--color-faint)] mt-6">
           영업사원 등록은 본사 운영팀 담당자에게 문의
         </p>
       </div>
@@ -127,8 +164,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-[100dvh] flex items-center justify-center bg-brand-50">
-          <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-[100dvh] flex items-center justify-center bg-[var(--color-surface)]">
+          <div className="w-10 h-10 border-4 border-[var(--color-brand-500)] border-t-transparent rounded-full animate-spin" />
         </div>
       }
     >

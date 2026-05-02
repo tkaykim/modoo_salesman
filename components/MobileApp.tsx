@@ -13,6 +13,8 @@ import { AppBar, TabBar, NavSpacer, Card, Section, HairLine, Icon, Chip, type Ic
 import CreateTeamSheet from '@/components/CreateTeamSheet';
 import CreateOrderSheet from '@/components/CreateOrderSheet';
 import PerformanceTab from '@/components/PerformanceTab';
+import TeamDetailSheet from '@/components/TeamDetailSheet';
+import MyOrdersSheet from '@/components/MyOrdersSheet';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -22,6 +24,8 @@ export default function MobileApp() {
   const [tab, setTab] = useState<Tab>('home');
   const [orderModal, setOrderModal] = useState<{ open: boolean; teamId: string | null }>({ open: false, teamId: null });
   const [lastCreatedOrderId, setLastCreatedOrderId] = useState<string | null>(null);
+  const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
+  const [editTeamId, setEditTeamId] = useState<string | null>(null);
 
   const { user } = useSalesmanStore();
   const { teams, mutate: refetchTeams } = useMyTeams();
@@ -95,6 +99,7 @@ export default function MobileApp() {
               <CrmTab
                 teams={teams}
                 onCreateOrderForTeam={(teamId) => setOrderModal({ open: true, teamId })}
+                onOpenDetail={(teamId) => setDetailTeamId(teamId)}
                 onTeamMutate={refetchTeams}
               />
             )}
@@ -122,6 +127,30 @@ export default function MobileApp() {
           onCreated={(orderId) => {
             setLastCreatedOrderId(orderId);
             refetchTeams();
+          }}
+        />
+
+        <TeamDetailSheet
+          open={!!detailTeamId}
+          teamId={detailTeamId}
+          onClose={() => setDetailTeamId(null)}
+          onCreateOrder={(teamId) => {
+            setDetailTeamId(null);
+            setOrderModal({ open: true, teamId });
+          }}
+          onEdit={(teamId) => {
+            setDetailTeamId(null);
+            setEditTeamId(teamId);
+          }}
+        />
+
+        <CreateTeamSheet
+          open={!!editTeamId}
+          editTeamId={editTeamId}
+          onClose={() => setEditTeamId(null)}
+          onCreated={() => {
+            refetchTeams();
+            setEditTeamId(null);
           }}
         />
       </main>
@@ -271,10 +300,12 @@ function KPICard({ label, value, accent }: { label: string; value: string; accen
 function CrmTab({
   teams,
   onCreateOrderForTeam,
+  onOpenDetail,
   onTeamMutate,
 }: {
   teams: Team[];
   onCreateOrderForTeam: (teamId: string) => void;
+  onOpenDetail: (teamId: string) => void;
   onTeamMutate: () => void;
 }) {
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
@@ -350,28 +381,42 @@ function CrmTab({
             const phoneHref = team.phone ? `tel:${team.phone.replace(/[^0-9+]/g, '')}` : null;
             return (
               <Card key={team.id} padding="md" className={isUrgent ? 'border-[var(--color-warn)]' : ''}>
-                <div className="mb-2">
+                <button
+                  onClick={() => onOpenDetail(team.id)}
+                  className="w-full text-left mb-2 active:opacity-80"
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      {team.category && (
-                        <span className="text-[10px] font-bold bg-[var(--color-surface-alt)] text-[var(--color-muted)] px-1.5 py-0.5 rounded mb-1 inline-block">
-                          {team.category}
-                        </span>
+                    <div className="min-w-0 flex-1 flex items-start gap-2.5">
+                      {team.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={team.logoUrl} alt={team.name} className="w-10 h-10 rounded-[8px] object-contain bg-[var(--color-surface-alt)] flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-[8px] bg-[var(--color-brand-100)] flex items-center justify-center flex-shrink-0">
+                          <Icon name="group" size={18} color="var(--color-brand-500)" />
+                        </div>
                       )}
-                      <h3 className="font-bold text-[15px] text-[var(--color-ink)] truncate">{team.name}</h3>
-                      <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
-                        {team.decisionMaker || '담당자 미기재'}
-                        {team.phone ? ` · ${team.phone}` : ''}
-                      </p>
-                      <p className="text-[10px] text-[var(--color-faint)] mt-0.5 font-mono num">
-                        누적 {team.totalOrders}건 · {fmt(team.totalRevenue)}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        {team.category && (
+                          <span className="text-[10px] font-bold bg-[var(--color-surface-alt)] text-[var(--color-muted)] px-1.5 py-0.5 rounded mb-1 inline-block">
+                            {team.category}
+                          </span>
+                        )}
+                        <h3 className="font-bold text-[15px] text-[var(--color-ink)] truncate">{team.name}</h3>
+                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                          {team.decisionMaker || '담당자 미기재'}
+                          {team.phone ? ` · ${team.phone}` : ''}
+                        </p>
+                        <p className="text-[10px] text-[var(--color-faint)] mt-0.5 font-mono num">
+                          누적 {team.totalOrders}건 · {fmt(team.totalRevenue)}
+                        </p>
+                      </div>
                     </div>
-                    {isUrgent && (
-                      <span className="w-2 h-2 bg-[var(--color-err)] rounded-full animate-pulse flex-shrink-0 mt-1" />
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {isUrgent && <span className="w-2 h-2 bg-[var(--color-err)] rounded-full animate-pulse" />}
+                      <Icon name="chevron-r" size={16} color="var(--color-faint)" />
+                    </div>
                   </div>
-                </div>
+                </button>
                 <HairLine className="my-2" />
                 <div className="flex gap-1.5">
                   {phoneHref ? (
@@ -410,18 +455,19 @@ function CrmTab({
 function MoreTab() {
   const router = useRouter();
   const { logout, user } = useSalesmanStore();
+  const [myOrdersOpen, setMyOrdersOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
-  const items: { icon: IconName; label: string; desc: string }[] = [
-    { icon: 'box',       label: '내 주문 내역',  desc: '준비중' },
-    { icon: 'sparkle',   label: 'e-Learning',    desc: '준비중' },
-    { icon: 'send',      label: '본사 채널',     desc: '준비중' },
-    { icon: 'menu',      label: '설정',          desc: '준비중' },
-    { icon: 'info',      label: 'FAQ',           desc: '준비중' },
+  const items: { icon: IconName; label: string; desc: string; onClick?: () => void; disabled?: boolean }[] = [
+    { icon: 'box',     label: '내 주문 내역', desc: '본인이 만든 / 단체 주문 전체', onClick: () => setMyOrdersOpen(true) },
+    { icon: 'sparkle', label: 'e-Learning',   desc: '준비중', disabled: true },
+    { icon: 'send',    label: '본사 채널',    desc: '준비중', disabled: true },
+    { icon: 'menu',    label: '설정',         desc: '준비중', disabled: true },
+    { icon: 'info',    label: 'FAQ',          desc: '준비중', disabled: true },
   ];
 
   return (
@@ -438,7 +484,9 @@ function MoreTab() {
         {items.map((m, i) => (
           <button
             key={m.label}
-            className={`w-full px-4 py-3 flex items-center gap-3 active:bg-[var(--color-surface-alt)] ${i > 0 ? 'border-t border-[var(--color-hairline-soft)]' : ''}`}
+            onClick={m.onClick}
+            disabled={m.disabled}
+            className={`w-full px-4 py-3 flex items-center gap-3 active:bg-[var(--color-surface-alt)] disabled:opacity-50 ${i > 0 ? 'border-t border-[var(--color-hairline-soft)]' : ''}`}
           >
             <div className="w-8 h-8 flex items-center justify-center rounded-[10px] bg-[var(--color-surface-alt)]">
               <Icon name={m.icon} size={18} color="var(--color-muted)" />
@@ -451,6 +499,8 @@ function MoreTab() {
           </button>
         ))}
       </Card>
+
+      <MyOrdersSheet open={myOrdersOpen} onClose={() => setMyOrdersOpen(false)} />
 
       <button
         onClick={handleLogout}

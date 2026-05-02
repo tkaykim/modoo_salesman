@@ -4,13 +4,34 @@
 export type TeamCategory = '학교' | '기업' | '동호회' | '매장' | '댄스';
 export type TeamStatus = 'new' | 'active' | 'reorder_due' | 'dormant';
 
+export interface TeamAddress {
+  postal?: string;
+  road?: string;
+  detail?: string;
+  /** 자유 입력 형태로 저장된 경우 fallback */
+  raw?: string;
+}
+
+export interface TeamContact {
+  name: string;
+  role?: string;       // 예: 코치, 회장, 점주, 인사담당
+  phone?: string;
+  email?: string;
+  isPrimary?: boolean;
+}
+
 export interface TeamMeta {
   category?: TeamCategory;
   size?: number;
+  /** @deprecated — contacts[]로 이전. 마이그레이션 전 row 호환용 */
   decisionMaker?: string;
+  /** @deprecated — contacts[]로 이전 */
   phone?: string;
   reorderCycleMonths?: number;
   note?: string;
+  // 신규 필드
+  address?: TeamAddress;
+  contacts?: TeamContact[];
 }
 
 export interface PartnerMallRow {
@@ -42,10 +63,16 @@ export interface Team {
   isActive: boolean;
   category: TeamCategory | null;
   size: number | null;
+  /** primary contact 이름 (contacts[0].name 또는 legacy decisionMaker) */
   decisionMaker: string | null;
+  /** primary contact 전화 (contacts[0].phone 또는 legacy phone) */
   phone: string | null;
   reorderCycleMonths: number | null;
   note: string | null;
+  address: TeamAddress | null;
+  contacts: TeamContact[];
+  ownerSalesmanId: string | null;
+  createdAt: string | null;
   // 주문 집계 (없으면 0/null)
   totalOrders: number;
   totalRevenue: number;
@@ -91,6 +118,14 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
     ? Math.floor((Date.now() - new Date(agg.lastOrderAt).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
+  // contacts[] 우선, 없으면 legacy decisionMaker/phone
+  const contacts: TeamContact[] = Array.isArray(meta.contacts) && meta.contacts.length > 0
+    ? meta.contacts
+    : meta.decisionMaker
+      ? [{ name: meta.decisionMaker, phone: meta.phone, isPrimary: true }]
+      : [];
+  const primary = contacts.find((c) => c.isPrimary) ?? contacts[0] ?? null;
+
   return {
     id: row.id,
     name: row.name,
@@ -100,10 +135,14 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
     isActive: !!row.is_active,
     category: meta.category ?? null,
     size: meta.size ?? null,
-    decisionMaker: meta.decisionMaker ?? null,
-    phone: meta.phone ?? null,
+    decisionMaker: primary?.name ?? meta.decisionMaker ?? null,
+    phone: primary?.phone ?? meta.phone ?? null,
     reorderCycleMonths: meta.reorderCycleMonths ?? null,
     note: meta.note ?? null,
+    address: meta.address ?? null,
+    contacts,
+    ownerSalesmanId: row.owner_salesman_id,
+    createdAt: row.created_at,
     totalOrders: agg.totalOrders,
     totalRevenue: agg.totalRevenue,
     lastOrderAt: agg.lastOrderAt,
@@ -112,6 +151,12 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
     history: agg.history,
     status: computeStatus(agg.totalOrders, lastOrderDays, meta.reorderCycleMonths ?? null),
   };
+}
+
+export function formatAddress(addr: TeamAddress | null | undefined): string {
+  if (!addr) return '';
+  if (addr.raw) return addr.raw;
+  return [addr.postal ? `[${addr.postal}]` : '', addr.road, addr.detail].filter(Boolean).join(' ');
 }
 
 export const CATEGORY_OPTIONS: TeamCategory[] = ['학교', '기업', '동호회', '매장', '댄스'];
@@ -128,3 +173,5 @@ export const CATEGORY_COLORS: Record<TeamCategory, string> = {
   매장: 'bg-amber-100 text-amber-800',
   댄스: 'bg-pink-100 text-pink-800',
 };
+
+export const CONTACT_ROLE_OPTIONS = ['결정권자', '담당자', '코치', '회장', '점주', '인사담당', '구매담당', '기타'];

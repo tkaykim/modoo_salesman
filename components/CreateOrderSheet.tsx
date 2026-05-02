@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X, Plus, Minus, Trash2, Search, ShoppingCart, Tag, Check, ChevronRight } from 'lucide-react';
+import { Icon } from '@/components/ui';
 import { createClient } from '@/lib/supabase-client';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts';
@@ -314,12 +314,12 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-brand-600" />
+            <Icon name="cart" size={20} color="var(--color-brand-500)" />
             <h2 className="text-base font-bold text-gray-900">새 주문 생성</h2>
             <span className="text-[11px] text-gray-500">Step {step}/3</span>
           </div>
           <button onClick={onClose} disabled={submitting} className="p-1 -mr-1 text-gray-500">
-            <X className="w-5 h-5" />
+            <Icon name="close" size={20} />
           </button>
         </div>
 
@@ -423,7 +423,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
               disabled={!stepValid}
               className="flex-[2] bg-brand-500 text-white font-bold py-3 rounded-lg disabled:opacity-40 flex items-center justify-center gap-1"
             >
-              다음 <ChevronRight className="w-4 h-4" />
+              다음 <Icon name="chevron-r" size={16} />
             </button>
           )}
           {step === 3 && (
@@ -432,7 +432,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
               disabled={submitting}
               className="flex-[2] bg-brand-500 text-white font-bold py-3 rounded-lg disabled:opacity-40 flex items-center justify-center gap-1"
             >
-              {submitting ? '등록 중...' : <><Check className="w-4 h-4" /> 주문 등록</>}
+              {submitting ? '등록 중...' : <><Icon name="check" size={16} /> 주문 등록</>}
             </button>
           )}
         </div>
@@ -479,7 +479,7 @@ function Step1Items({
         onClick={onAddProduct}
         className="w-full border-2 border-dashed border-brand-300 bg-brand-50 text-brand-700 font-bold py-3 rounded-lg flex items-center justify-center gap-1.5 active:bg-brand-100"
       >
-        <Plus className="w-4 h-4" /> 제품 선택
+        <Icon name="plus" size={16} /> 제품 선택
       </button>
 
       {items.length === 0 && (
@@ -555,7 +555,7 @@ function ItemEditor({
           <div className="text-[11px] text-gray-500 font-mono">기본 단가 {fmt(item.basePrice)}</div>
         </div>
         <button onClick={onRemove} className="p-1 text-red-500 active:bg-red-50 rounded">
-          <Trash2 className="w-4 h-4" />
+          <Icon name="trash" size={16} />
         </button>
       </div>
 
@@ -570,7 +570,7 @@ function ItemEditor({
                 onClick={() => updateVariant(idx, v.quantity - 1)}
                 className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-600 active:bg-gray-100"
               >
-                <Minus className="w-3 h-3" />
+                <Icon name="minus" size={14} />
               </button>
               <input
                 type="number"
@@ -585,7 +585,7 @@ function ItemEditor({
                 onClick={() => updateVariant(idx, v.quantity + 1)}
                 className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-600 active:bg-gray-100"
               >
-                <Plus className="w-3 h-3" />
+                <Icon name="plus" size={14} />
               </button>
             </div>
           ))}
@@ -598,7 +598,7 @@ function ItemEditor({
         <div className="flex justify-between items-center mb-1.5">
           <div className="text-[11px] font-bold text-gray-700">인쇄 ({item.prints.length})</div>
           <button onClick={addPrint} className="text-[11px] text-brand-600 font-bold flex items-center gap-0.5">
-            <Plus className="w-3 h-3" /> 인쇄 추가
+            <Icon name="plus" size={14} /> 인쇄 추가
           </button>
         </div>
         {item.prints.length === 0 ? (
@@ -626,7 +626,7 @@ function ItemEditor({
                   ))}
                 </select>
                 <button onClick={() => removePrint(idx)} className="p-1 text-red-500 active:bg-red-50 rounded">
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Icon name="trash" size={14} />
                 </button>
               </div>
             ))}
@@ -675,12 +675,12 @@ function ProductPicker({
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <h3 className="text-base font-bold text-gray-900">제품 선택</h3>
         <button onClick={onClose} className="text-gray-500 p-1">
-          <X className="w-5 h-5" />
+          <Icon name="close" size={20} />
         </button>
       </div>
       <div className="px-4 py-2 border-b border-gray-100">
         <div className="bg-gray-100 rounded-lg flex items-center px-3 py-2 gap-2">
-          <Search className="w-4 h-4 text-gray-400" />
+          <Icon name="search" size={16} color="var(--color-faint)" />
           <input
             type="text"
             value={search}
@@ -904,7 +904,7 @@ function Step3Payment({
             />
             <div className="flex-1">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <Tag className="w-3.5 h-3.5 text-brand-600" />
+                <Icon name="tag" size={14} color="var(--color-brand-500)" />
                 <span className="text-xs font-bold text-gray-900">내 할인코드 적용</span>
               </div>
               <div className="text-[11px] text-gray-700 font-mono">{primaryCoupon.code}</div>

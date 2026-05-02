@@ -68,7 +68,9 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
   // 결제/할인
   const [useCoupon, setUseCoupon] = useState(true);
   const [adminDiscount, setAdminDiscount] = useState<string>('');
+  const [adminDiscountMode, setAdminDiscountMode] = useState<'total' | 'per_unit'>('total');
   const [adminSurcharge, setAdminSurcharge] = useState<string>('');
+  const [adminSurchargeMode, setAdminSurchargeMode] = useState<'total' | 'per_unit'>('total');
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'domestic'>('pickup');
   const [paymentType, setPaymentType] = useState<'bank_transfer' | 'customer_payment' | 'completed'>('bank_transfer');
   const [notes, setNotes] = useState('');
@@ -87,7 +89,9 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
       setCustomerEmail('');
       setUseCoupon(true);
       setAdminDiscount('');
+      setAdminDiscountMode('total');
       setAdminSurcharge('');
+      setAdminSurchargeMode('total');
       setDeliveryMethod('pickup');
       setPaymentType('bank_transfer');
       setNotes('');
@@ -97,23 +101,36 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
 
   // 견적 합계 계산
   const deliveryFee = deliveryMethod === 'domestic' ? 3000 : 0;
+  // 총 수량 (per_unit 모드 환산용)
+  const totalQty = useMemo(
+    () => items.reduce((s, it) => s + it.variants.reduce((q, v) => q + (Number(v.quantity) || 0), 0), 0),
+    [items]
+  );
+  const adminDiscountInput = Math.max(0, Number(adminDiscount) || 0);
+  const adminSurchargeInput = Math.max(0, Number(adminSurcharge) || 0);
+  // per_unit 모드면 입력값 × 총수량 = 절대값. 절대값을 calcOrderPricing 및 DB 저장에 사용.
+  const adminDiscountAbs =
+    adminDiscountMode === 'per_unit' ? adminDiscountInput * totalQty : adminDiscountInput;
+  const adminSurchargeAbs =
+    adminSurchargeMode === 'per_unit' ? adminSurchargeInput * totalQty : adminSurchargeInput;
+
   const pricingNoCoupon = useMemo(
     () => calcOrderPricing(items, printConfig, {
       deliveryFee,
-      adminDiscount: Number(adminDiscount) || 0,
-      adminSurcharge: Number(adminSurcharge) || 0,
+      adminDiscount: adminDiscountAbs,
+      adminSurcharge: adminSurchargeAbs,
     }),
-    [items, printConfig, deliveryFee, adminDiscount, adminSurcharge]
+    [items, printConfig, deliveryFee, adminDiscountAbs, adminSurchargeAbs]
   );
   const couponDiscount = useCoupon ? calcCouponDiscount(primaryCoupon, pricingNoCoupon.originalAmount) : 0;
   const pricing = useMemo(
     () => calcOrderPricing(items, printConfig, {
       deliveryFee,
       couponDiscount,
-      adminDiscount: Number(adminDiscount) || 0,
-      adminSurcharge: Number(adminSurcharge) || 0,
+      adminDiscount: adminDiscountAbs,
+      adminSurcharge: adminSurchargeAbs,
     }),
-    [items, printConfig, deliveryFee, couponDiscount, adminDiscount, adminSurcharge]
+    [items, printConfig, deliveryFee, couponDiscount, adminDiscountAbs, adminSurchargeAbs]
   );
 
   const commissionRate = (() => {
@@ -195,8 +212,8 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
         original_amount: pricing.originalAmount,
         delivery_fee: deliveryFee,
         coupon_discount: couponDiscount,
-        admin_discount: Number(adminDiscount) || 0,
-        admin_surcharge: Number(adminSurcharge) || 0,
+        admin_discount: adminDiscountAbs,
+        admin_surcharge: adminSurchargeAbs,
         applied_coupon_id: useCoupon && primaryCoupon ? primaryCoupon.id : null,
         customer_name: customerName.trim() || null,
         customer_phone: customerPhone.trim() || null,

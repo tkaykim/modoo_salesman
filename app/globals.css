@@ -1,22 +1,67 @@
+/* Pretendard 웹폰트 — must precede tailwindcss import */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 @import "tailwindcss";
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1f242c;
 }
 
 @theme {
-  /* 브랜드 컬러 — modoo_admin과 동일한 #0052CC */
+  /* ═══════════════════════════════════════════════════════════════
+     v2 디자인 토큰 — modoo_app/app/v2/_components/tokens.tsx 매핑
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* Brand */
   --color-brand-50: #e6efff;
-  --color-brand-100: #cce0ff;
-  --color-brand-200: #99c0ff;
-  --color-brand-300: #66a1ff;
+  --color-brand-100: #e6eefb;          /* brandSoft */
+  --color-brand-200: #cce0ff;
+  --color-brand-300: #99c0ff;
   --color-brand-400: #3381ff;
-  --color-brand-500: #0052cc;
-  --color-brand-600: #003d99;
+  --color-brand-500: #0052cc;          /* brand (primary) */
+  --color-brand-600: #003d99;          /* brandDeep */
   --color-brand-700: #002a66;
-  --color-brand-800: #001b42;
+  --color-brand-800: #001f5c;          /* brandInk */
   --color-brand-900: #000d21;
+  --color-brand-softer: #f2f6fc;
+
+  /* Semantic */
+  --color-pos: #10b981;                /* success */
+  --color-warn: #f59e0b;
+  --color-err: #ef4444;
+  --color-pink: #ff5c8a;
+  --color-yolk: #ffd25c;
+
+  /* Neutral hierarchy */
+  --color-ink: #0e1116;                /* darkest text */
+  --color-body: #1f242c;               /* primary body text */
+  --color-muted: #5c6573;              /* secondary text */
+  --color-faint: #8a93a2;              /* tertiary/disabled */
+  --color-hairline: #e6e8ec;           /* borders */
+  --color-hairline-soft: #eef0f4;      /* subtle dividers */
+  --color-surface: #ffffff;
+  --color-surface-alt: #f7f8fa;
+  --color-surface-warm: #fafaf7;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 9999px;
+
+  /* Shadows (brand-tinted) */
+  --shadow-cta: 0 6px 16px rgba(0, 82, 204, 0.2);
+  --shadow-fab: 0 8px 18px rgba(0, 82, 204, 0.4);
+  --shadow-hero: 0 12px 28px rgba(0, 82, 204, 0.25);
+  --shadow-card: 0 1px 2px rgba(14, 17, 22, 0.04);
+
+  /* Animation */
+  --animate-pulse-soft: modoo-pulse 1.6s ease-in-out infinite;
+  --animate-shine: modoo-shine 2.4s ease-in-out infinite;
+  --animate-bob: modoo-bob 1.6s ease-in-out infinite;
+  --animate-spin-slow: modoo-spin 1.4s linear infinite;
 }
 
 @theme inline {
@@ -24,16 +69,59 @@
   --color-foreground: var(--foreground);
 }
 
-/* 다크모드는 영업사원 앱 v1에서 비활성 (단순화) */
-
+/* Global typography rules — match v2 */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-body);
+  font-family: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Tabular nums helper */
+.num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* iOS 자동 스케일 방지 */
 input, textarea, select {
   font-size: 16px;
+}
+
+/* Hide scrollbar (mobile feel) */
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   v2 keyframe animations
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes modoo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@keyframes modoo-shine {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(110%); }
+}
+@keyframes modoo-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes modoo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes modoo-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* Glass effect — bottom tab bar etc */
+.glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }

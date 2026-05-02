@@ -361,8 +361,12 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
               setUseCoupon={setUseCoupon}
               adminDiscount={adminDiscount}
               setAdminDiscount={setAdminDiscount}
+              adminDiscountMode={adminDiscountMode}
+              setAdminDiscountMode={setAdminDiscountMode}
               adminSurcharge={adminSurcharge}
               setAdminSurcharge={setAdminSurcharge}
+              adminSurchargeMode={adminSurchargeMode}
+              setAdminSurchargeMode={setAdminSurchargeMode}
               deliveryMethod={deliveryMethod}
               setDeliveryMethod={setDeliveryMethod}
               paymentType={paymentType}
@@ -372,6 +376,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
               pricing={pricing}
               couponDiscount={couponDiscount}
               commissionRate={commissionRate}
+              totalQty={totalQty}
             />
           )}
 
@@ -381,12 +386,28 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
         </div>
 
         {/* Live total bar */}
-        <div className="border-t border-gray-200 px-4 py-2 bg-gray-50 flex justify-between items-center text-xs">
-          <div className="text-gray-600">
-            품목 {items.length} · 수량 {pricing.totalQuantity}
-            {couponDiscount > 0 && <span className="ml-1 text-brand-600 font-bold">· 쿠폰 -{fmt(couponDiscount)}</span>}
+        <div className="border-t border-gray-200 px-4 py-2 bg-gray-50 flex justify-between items-center text-xs gap-2">
+          <div className="text-gray-600 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+            <span>품목 {items.length} · 수량 {pricing.totalQuantity}</span>
+            {couponDiscount > 0 && <span className="text-brand-600 font-bold">· 쿠폰 -{fmt(couponDiscount)}</span>}
+            {pricing.adminDiscount > 0 && (
+              <span className="text-orange-600 font-bold">
+                · 임의할인 -{fmt(pricing.adminDiscount)}
+                {adminDiscountMode === 'per_unit' && pricing.totalQuantity > 0 && (
+                  <span className="font-normal text-orange-500"> ({fmt(adminDiscountInput)}/벌)</span>
+                )}
+              </span>
+            )}
+            {pricing.adminSurcharge > 0 && (
+              <span className="text-orange-600 font-bold">
+                · 추가금 +{fmt(pricing.adminSurcharge)}
+                {adminSurchargeMode === 'per_unit' && pricing.totalQuantity > 0 && (
+                  <span className="font-normal text-orange-500"> ({fmt(adminSurchargeInput)}/벌)</span>
+                )}
+              </span>
+            )}
           </div>
-          <div className="font-bold text-base font-mono text-gray-900">{fmt(pricing.totalAmount)}</div>
+          <div className="font-bold text-base font-mono text-gray-900 shrink-0">{fmt(pricing.totalAmount)}</div>
         </div>
 
         {/* Footer */}
@@ -828,8 +849,12 @@ function Step3Payment({
   setUseCoupon,
   adminDiscount,
   setAdminDiscount,
+  adminDiscountMode,
+  setAdminDiscountMode,
   adminSurcharge,
   setAdminSurcharge,
+  adminSurchargeMode,
+  setAdminSurchargeMode,
   deliveryMethod,
   setDeliveryMethod,
   paymentType,
@@ -839,14 +864,19 @@ function Step3Payment({
   pricing,
   couponDiscount,
   commissionRate,
+  totalQty,
 }: {
   primaryCoupon: ReturnType<typeof useMyCoupons>['primary'];
   useCoupon: boolean;
   setUseCoupon: (v: boolean) => void;
   adminDiscount: string;
   setAdminDiscount: (v: string) => void;
+  adminDiscountMode: 'total' | 'per_unit';
+  setAdminDiscountMode: (v: 'total' | 'per_unit') => void;
   adminSurcharge: string;
   setAdminSurcharge: (v: string) => void;
+  adminSurchargeMode: 'total' | 'per_unit';
+  setAdminSurchargeMode: (v: 'total' | 'per_unit') => void;
   deliveryMethod: 'pickup' | 'domestic';
   setDeliveryMethod: (v: 'pickup' | 'domestic') => void;
   paymentType: 'bank_transfer' | 'customer_payment' | 'completed';
@@ -856,7 +886,10 @@ function Step3Payment({
   pricing: ReturnType<typeof calcOrderPricing>;
   couponDiscount: number;
   commissionRate: number;
+  totalQty: number;
 }) {
+  const adminDiscountRaw = Math.max(0, Number(adminDiscount) || 0);
+  const adminSurchargeRaw = Math.max(0, Number(adminSurcharge) || 0);
   return (
     <div className="space-y-4">
       {/* 영업사원 할인코드 */}
@@ -886,28 +919,79 @@ function Step3Payment({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="임의 할인 (₩)">
+      <Field label="임의 할인 (₩)">
+        <div className="flex gap-1.5">
+          <div className="grid grid-cols-2 gap-0.5 p-0.5 rounded-lg bg-gray-100 shrink-0 self-stretch">
+            {[
+              { v: 'total' as const, label: '전체' },
+              { v: 'per_unit' as const, label: '벌당' },
+            ].map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setAdminDiscountMode(opt.v)}
+                className={`px-2.5 text-[11px] font-bold rounded-md transition ${
+                  adminDiscountMode === opt.v
+                    ? 'bg-white text-brand-600 shadow-sm'
+                    : 'text-gray-500'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input
             type="number"
             inputMode="numeric"
             value={adminDiscount}
             onChange={(e) => setAdminDiscount(e.target.value)}
             placeholder="0"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-500"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-mono text-right focus:outline-none focus:border-brand-500"
           />
-        </Field>
-        <Field label="추가 금액 (₩)">
+        </div>
+        {adminDiscountMode === 'per_unit' && adminDiscountRaw > 0 && totalQty > 0 && (
+          <div className="text-[11px] text-orange-600 mt-1 font-medium">
+            {fmt(adminDiscountRaw)} × {totalQty}벌 = -{fmt(adminDiscountRaw * totalQty)}
+          </div>
+        )}
+      </Field>
+
+      <Field label="추가 금액 (₩)">
+        <div className="flex gap-1.5">
+          <div className="grid grid-cols-2 gap-0.5 p-0.5 rounded-lg bg-gray-100 shrink-0 self-stretch">
+            {[
+              { v: 'total' as const, label: '전체' },
+              { v: 'per_unit' as const, label: '벌당' },
+            ].map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setAdminSurchargeMode(opt.v)}
+                className={`px-2.5 text-[11px] font-bold rounded-md transition ${
+                  adminSurchargeMode === opt.v
+                    ? 'bg-white text-brand-600 shadow-sm'
+                    : 'text-gray-500'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input
             type="number"
             inputMode="numeric"
             value={adminSurcharge}
             onChange={(e) => setAdminSurcharge(e.target.value)}
             placeholder="0"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:border-brand-500"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-mono text-right focus:outline-none focus:border-brand-500"
           />
-        </Field>
-      </div>
+        </div>
+        {adminSurchargeMode === 'per_unit' && adminSurchargeRaw > 0 && totalQty > 0 && (
+          <div className="text-[11px] text-orange-600 mt-1 font-medium">
+            {fmt(adminSurchargeRaw)} × {totalQty}벌 = +{fmt(adminSurchargeRaw * totalQty)}
+          </div>
+        )}
+      </Field>
 
       <Field label="배송 방식">
         <div className="grid grid-cols-2 gap-1.5">

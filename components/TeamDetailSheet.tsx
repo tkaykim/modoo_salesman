@@ -677,8 +677,8 @@ function AssetThumb({
 // =====================================================================
 function ShareLinkTab({ team }: { team: Team }) {
   const [copied, setCopied] = useState(false);
-  // 고객용 앱 도메인 = NEXT_PUBLIC_APP_BASE_URL (Vercel env). default: modoouniform.com
-  const customerAppBase = (process.env.NEXT_PUBLIC_APP_BASE_URL || 'https://modoouniform.com').replace(/\/$/, '');
+  // 고객용 modoo_app 도메인 (production 고정)
+  const customerAppBase = 'https://modoouniform.com';
   const slug = team.slug || team.shareToken;
   const link = slug ? `${customerAppBase}/mall/${slug}` : null;
 

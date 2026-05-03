@@ -14,8 +14,9 @@ import { useMyTeams } from '@/hooks/useMyTeams';
 import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
-const ADMIN_BASE = (process.env.NEXT_PUBLIC_ADMIN_BASE_URL || 'https://admin.modoogoods.com').replace(/\/$/, '');
-const APP_BASE = (process.env.NEXT_PUBLIC_APP_BASE_URL || 'https://modoouniform.com').replace(/\/$/, '');
+// production 고정 도메인 (env var 사용 안 함)
+const ADMIN_BASE = 'https://admin.modoogoods.com';
+const APP_BASE = 'https://modoouniform.com';
 
 interface OrderVariant {
   sizeLabel: string;

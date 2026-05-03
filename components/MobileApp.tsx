@@ -16,6 +16,7 @@ import PerformanceTab from '@/components/PerformanceTab';
 import TeamDetailSheet from '@/components/TeamDetailSheet';
 import MyOrdersSheet from '@/components/MyOrdersSheet';
 import PriceCalculatorSheet from '@/components/PriceCalculatorSheet';
+import NewOrderChooser from '@/components/NewOrderChooser';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -28,6 +29,7 @@ export default function MobileApp() {
   const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
 
   const { user } = useSalesmanStore();
   const { teams, mutate: refetchTeams } = useMyTeams();
@@ -93,7 +95,7 @@ export default function MobileApp() {
                 totalRevenue={totalRevenue}
                 teams={teams}
                 reorderDue={reorderDue}
-                onCreateOrder={() => setOrderModal({ open: true, teamId: null })}
+                onCreateOrder={() => setChooserOpen(true)}
                 onOpenCalculator={() => setCalcOpen(true)}
                 onNavigate={setTab}
               />
@@ -158,6 +160,12 @@ export default function MobileApp() {
         />
 
         <PriceCalculatorSheet open={calcOpen} onClose={() => setCalcOpen(false)} />
+
+        <NewOrderChooser
+          open={chooserOpen}
+          onClose={() => setChooserOpen(false)}
+          onQuickQuote={(teamId) => setOrderModal({ open: true, teamId })}
+        />
       </main>
     </div>
   );

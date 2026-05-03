@@ -12,6 +12,7 @@ import { useProducts, matchProduct, type ProductRow, type ProductSizeOption } fr
 import { useMyCoupons } from '@/hooks/useMyCoupons';
 import { useMyTeams } from '@/hooks/useMyTeams';
 import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
+import DesignEditorModal from '@/components/DesignEditorModal';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 // production 고정 도메인 (env var 사용 안 함)
@@ -98,6 +99,12 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // In-app design editor modal state (Phase 7)
+  const [editorModal, setEditorModal] = useState<{
+    productId: string;
+    initialColor?: string;
+  } | null>(null);
+
   // reset on open
   useEffect(() => {
     if (open) {
@@ -176,17 +183,11 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
     setStep('items');
   };
 
-  const openExternalEditor = (p: ProductRow) => {
-    // modoo_admin /editor/<productId> 새 창. 디자인 작업 후 admin 의 saved_designs 에 저장됨.
-    // 영업사원은 작업 완료 후 [기존 디자인 가져오기] 로 본인 design 을 다시 import.
-    const url = `${ADMIN_BASE}/editor/${p.id}?mode=design&fromSalesman=1`;
-    window.open(url, '_blank', 'noopener');
-    // UI 안내: 새 창에서 작업 후 [기존 디자인 가져오기] 로 가져와주세요
-    alert(
-      '새 창에서 디자인을 진행하세요.\n' +
-      '디자인 저장 후 이 화면으로 돌아와 [기존 디자인 가져오기]에서 방금 저장한 디자인을 선택해주세요.\n\n' +
-      '※ admin.modoogoods.com 로그인이 필요합니다 (영업사원 계정으로 로그인).'
-    );
+  const openInAppEditor = (p: ProductRow) => {
+    // Phase 7: in-app full-screen editor modal — no tab switch needed
+    setEditorModal({ productId: p.id });
+    // Go back to items step so when modal closes we're on the right screen
+    setStep('items');
   };
 
   const addItemFromDesign = async (designs: SavedDesignRow[]) => {
@@ -389,10 +390,10 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
               products={filteredProducts}
               search={productSearch}
               onSearchChange={setProductSearch}
-              onPick={openExternalEditor}
+              onPick={openInAppEditor}
               isLoading={productsLoading}
-              hint="새 창의 에디터로 디자인 작업 후 [기존 디자인 가져오기]로 다시 가져옵니다."
-              actionLabel="에디터 열기"
+              hint="제품을 선택하면 인앱 에디터로 바로 디자인을 시작합니다. 저장하면 자동으로 품목에 추가됩니다."
+              actionLabel="디자인 시작"
               actionIcon="arrow-up-r"
             />
           )}
@@ -490,6 +491,20 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
           )}
         </div>
       </div>
+
+      {/* Phase 7: In-app design editor modal */}
+      {editorModal && (
+        <DesignEditorModal
+          productId={editorModal.productId}
+          initialColor={editorModal.initialColor}
+          onSaveComplete={(designRow) => {
+            // Close modal then add item
+            setEditorModal(null);
+            addItemFromDesign([designRow]);
+          }}
+          onClose={() => setEditorModal(null)}
+        />
+      )}
     </div>
   );
 }

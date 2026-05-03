@@ -12,6 +12,7 @@ import type { Team } from '@/lib/teams';
 import { AppBar, TabBar, NavSpacer, Card, Section, HairLine, Icon, Chip, type IconName } from '@/components/ui';
 import CreateTeamSheet from '@/components/CreateTeamSheet';
 import CreateOrderSheet from '@/components/CreateOrderSheet';
+import CreateOrderSheetV2 from '@/components/CreateOrderSheetV2';
 import PerformanceTab from '@/components/PerformanceTab';
 import TeamDetailSheet from '@/components/TeamDetailSheet';
 import MyOrdersSheet from '@/components/MyOrdersSheet';
@@ -30,6 +31,8 @@ export default function MobileApp() {
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
   const [chooserOpen, setChooserOpen] = useState(false);
+  const [orderV2, setOrderV2] = useState<{ open: boolean; teamId: string | null }>({ open: false, teamId: null });
+  const [paymentLinkInfo, setPaymentLinkInfo] = useState<{ orderId: string; url: string } | null>(null);
 
   const { user } = useSalesmanStore();
   const { teams, mutate: refetchTeams } = useMyTeams();
@@ -164,9 +167,77 @@ export default function MobileApp() {
         <NewOrderChooser
           open={chooserOpen}
           onClose={() => setChooserOpen(false)}
-          onQuickQuote={(teamId) => setOrderModal({ open: true, teamId })}
+          onFullOrder={() => setOrderV2({ open: true, teamId: null })}
+          onQuickQuote={() => setOrderModal({ open: true, teamId: null })}
         />
+
+        <CreateOrderSheetV2
+          open={orderV2.open}
+          preselectedTeamId={orderV2.teamId}
+          onClose={() => setOrderV2({ open: false, teamId: null })}
+          onCreated={(orderId, paymentLinkUrl) => {
+            setLastCreatedOrderId(orderId);
+            if (paymentLinkUrl) setPaymentLinkInfo({ orderId, url: paymentLinkUrl });
+            refetchTeams();
+          }}
+        />
+
+        {paymentLinkInfo && (
+          <PaymentLinkModal
+            orderId={paymentLinkInfo.orderId}
+            url={paymentLinkInfo.url}
+            onClose={() => setPaymentLinkInfo(null)}
+          />
+        )}
       </main>
+    </div>
+  );
+}
+
+// =====================================================================
+// Payment Link Modal
+// =====================================================================
+function PaymentLinkModal({ orderId, url, onClose }: { orderId: string; url: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-3">
+      <div className="bg-white rounded-[20px] w-full max-w-md p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-9 h-9 bg-[var(--color-pos)]/10 rounded-full flex items-center justify-center">
+            <Icon name="check" size={18} color="var(--color-pos)" strokeWidth={2.5} />
+          </div>
+          <div>
+            <p className="text-[14px] font-bold text-[var(--color-ink)]">결제 링크 생성됨</p>
+            <p className="text-[11px] text-[var(--color-muted)] font-mono">{orderId}</p>
+          </div>
+        </div>
+        <p className="text-[12px] text-[var(--color-muted)] mb-2 leading-relaxed">
+          아래 링크를 고객에게 전달하세요. 고객이 결제하면 매출이 자동으로 본인에게 귀속됩니다.
+        </p>
+        <div className="bg-[var(--color-surface-alt)] rounded-[10px] p-3 mb-3 break-all font-mono text-[11px] text-[var(--color-ink)]">
+          {url}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={copy}
+            className={`flex-1 py-3 rounded-[12px] font-bold text-[13px] flex items-center justify-center gap-1 ${copied ? 'bg-[var(--color-pos)]/10 text-[var(--color-pos)]' : 'bg-[var(--color-brand-500)] text-white'}`}
+            style={!copied ? { boxShadow: 'var(--shadow-cta)' } : undefined}
+          >
+            <Icon name={copied ? 'check' : 'share'} size={14} color={copied ? 'var(--color-pos)' : 'white'} />
+            {copied ? '복사됨' : '링크 복사'}
+          </button>
+          <button onClick={onClose} className="px-4 py-3 rounded-[12px] bg-[var(--color-surface-alt)] text-[var(--color-body)] font-bold text-[13px]">
+            닫기
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

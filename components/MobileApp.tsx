@@ -15,6 +15,7 @@ import CreateOrderSheet from '@/components/CreateOrderSheet';
 import PerformanceTab from '@/components/PerformanceTab';
 import TeamDetailSheet from '@/components/TeamDetailSheet';
 import MyOrdersSheet from '@/components/MyOrdersSheet';
+import PriceCalculatorSheet from '@/components/PriceCalculatorSheet';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -26,6 +27,7 @@ export default function MobileApp() {
   const [lastCreatedOrderId, setLastCreatedOrderId] = useState<string | null>(null);
   const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
+  const [calcOpen, setCalcOpen] = useState(false);
 
   const { user } = useSalesmanStore();
   const { teams, mutate: refetchTeams } = useMyTeams();
@@ -92,6 +94,7 @@ export default function MobileApp() {
                 teams={teams}
                 reorderDue={reorderDue}
                 onCreateOrder={() => setOrderModal({ open: true, teamId: null })}
+                onOpenCalculator={() => setCalcOpen(true)}
                 onNavigate={setTab}
               />
             )}
@@ -153,6 +156,8 @@ export default function MobileApp() {
             setEditTeamId(null);
           }}
         />
+
+        <PriceCalculatorSheet open={calcOpen} onClose={() => setCalcOpen(false)} />
       </main>
     </div>
   );
@@ -168,6 +173,7 @@ function HomeTab({
   teams,
   reorderDue,
   onCreateOrder,
+  onOpenCalculator,
   onNavigate,
 }: {
   grade: ReturnType<typeof getGrade>;
@@ -176,6 +182,7 @@ function HomeTab({
   teams: Team[];
   reorderDue: Team[];
   onCreateOrder: () => void;
+  onOpenCalculator: () => void;
   onNavigate: (t: Tab) => void;
 }) {
   const { findNext } = useGradeLevels();
@@ -196,9 +203,24 @@ function HomeTab({
         </span>
         <span className="flex-1 text-left">
           <span className="block font-bold text-[15px]">새 주문 생성</span>
-          <span className="block text-[11px] opacity-80 mt-0.5">제품 · 인쇄 · 사이즈별 수량 견적</span>
+          <span className="block text-[11px] opacity-80 mt-0.5">제품 · 디자인 · 사이즈별 수량 (admin 흐름)</span>
         </span>
         <Icon name="chevron-r" size={18} color="white" />
+      </button>
+
+      {/* 단가계산기 */}
+      <button
+        onClick={onOpenCalculator}
+        className="w-full bg-white border border-[var(--color-hairline)] rounded-[14px] p-3.5 flex items-center gap-3 active:bg-[var(--color-surface-alt)]"
+      >
+        <span className="w-9 h-9 bg-[var(--color-brand-100)] rounded-full flex items-center justify-center">
+          <Icon name="ruler" size={18} color="var(--color-brand-500)" />
+        </span>
+        <span className="flex-1 text-left">
+          <span className="block font-bold text-[14px] text-[var(--color-ink)]">단가 계산기</span>
+          <span className="block text-[11px] text-[var(--color-muted)] mt-0.5">디자인 없이 빠른 견적</span>
+        </span>
+        <Icon name="chevron-r" size={16} color="var(--color-faint)" />
       </button>
 
       {/* KPI 2-up */}

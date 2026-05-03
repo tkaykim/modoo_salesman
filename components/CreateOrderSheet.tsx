@@ -8,6 +8,7 @@ import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts'
 import { usePrintMethods } from '@/hooks/usePrintMethods';
 import { useMyCoupons } from '@/hooks/useMyCoupons';
 import { useMyTeams } from '@/hooks/useMyTeams';
+import TeamPicker from '@/components/TeamPicker';
 import {
   calcOrderPricing,
   calcCouponDiscount,
@@ -52,7 +53,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
   const { products, isLoading: productsLoading } = useProducts();
   const { config: printConfig, isLoading: printsLoading } = usePrintMethods();
   const { primary: primaryCoupon } = useMyCoupons();
-  const { teams } = useMyTeams();
+  const { teams, mutate: refetchTeams } = useMyTeams();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -344,6 +345,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
           {step === 2 && (
             <Step2Customer
               teams={teams}
+              refetchTeams={refetchTeams}
               partnerMallId={partnerMallId}
               setPartnerMallId={setPartnerMallId}
               customerName={customerName}
@@ -764,6 +766,7 @@ function ProductPicker({
 // =====================================================================
 function Step2Customer({
   teams,
+  refetchTeams,
   partnerMallId,
   setPartnerMallId,
   customerName,
@@ -774,6 +777,7 @@ function Step2Customer({
   setCustomerEmail,
 }: {
   teams: ReturnType<typeof useMyTeams>['teams'];
+  refetchTeams: ReturnType<typeof useMyTeams>['mutate'];
   partnerMallId: string | null;
   setPartnerMallId: (v: string | null) => void;
   customerName: string;
@@ -788,17 +792,14 @@ function Step2Customer({
       <div>
         <div className="text-xs font-bold text-gray-700 mb-1.5">단체 연결 (선택)</div>
         <div className="text-[11px] text-gray-500 mb-2">기존 단체에 주문을 연결하면 단체별 매출/이력이 자동 집계됩니다.</div>
-        <select
-          value={partnerMallId ?? ''}
-          onChange={(e) => setPartnerMallId(e.target.value || null)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white"
-        >
-          <option value="">단체 미연결 (개별 고객 주문)</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
-        <div className="text-[10px] text-gray-400 mt-1">단체가 없다면 [내 단체] 탭에서 먼저 등록 가능</div>
+        <TeamPicker
+          teams={teams}
+          selectedId={partnerMallId}
+          onSelect={setPartnerMallId}
+          onTeamsChanged={() => { refetchTeams(); }}
+          variant="legacy"
+        />
+        <div className="text-[10px] text-gray-400 mt-1">검색해도 없으면 그 자리에서 새 단체로 등록할 수 있어요.</div>
       </div>
 
       <div className="border-t border-gray-200 pt-4">

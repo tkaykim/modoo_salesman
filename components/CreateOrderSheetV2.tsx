@@ -13,6 +13,7 @@ import { useMyCoupons } from '@/hooks/useMyCoupons';
 import { useMyTeams } from '@/hooks/useMyTeams';
 import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
 import DesignEditorModal from '@/components/DesignEditorModal';
+import TeamPicker from '@/components/TeamPicker';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 // production 고정 도메인 (env var 사용 안 함)
@@ -77,7 +78,7 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
   const { user } = useSalesmanStore();
   const { products, isLoading: productsLoading } = useProducts();
   const { primary: primaryCoupon } = useMyCoupons();
-  const { teams } = useMyTeams();
+  const { teams, mutate: refetchTeams } = useMyTeams();
 
   const [step, setStep] = useState<Step>('items');
   const [items, setItems] = useState<OrderItemDraft[]>([]);
@@ -418,6 +419,7 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
           {step === 'details' && (
             <DetailsStep
               teams={teams}
+              refetchTeams={refetchTeams}
               partnerMallId={partnerMallId}
               setPartnerMallId={setPartnerMallId}
               customerName={customerName}
@@ -926,6 +928,7 @@ function DesignPicker({
 // =====================================================================
 interface DetailsStepProps {
   teams: ReturnType<typeof useMyTeams>['teams'];
+  refetchTeams: ReturnType<typeof useMyTeams>['mutate'];
   partnerMallId: string | null;
   setPartnerMallId: (v: string | null) => void;
   customerName: string;
@@ -957,7 +960,7 @@ interface DetailsStepProps {
 
 function DetailsStep(props: DetailsStepProps) {
   const {
-    teams, partnerMallId, setPartnerMallId,
+    teams, refetchTeams, partnerMallId, setPartnerMallId,
     customerName, setCustomerName, customerPhone, setCustomerPhone,
     customerEmail, setCustomerEmail, customerNote, setCustomerNote,
     shippingMethod, setShippingMethod,
@@ -970,16 +973,13 @@ function DetailsStep(props: DetailsStepProps) {
   return (
     <div className="p-4 space-y-4">
       <Section title="단체 연결 (선택)">
-        <select
-          value={partnerMallId ?? ''}
-          onChange={(e) => setPartnerMallId(e.target.value || null)}
-          className="w-full rounded-[10px] border border-[var(--color-hairline)] px-3 py-2.5 text-[14px] bg-white"
-        >
-          <option value="">단체 미연결</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+        <TeamPicker
+          teams={teams}
+          selectedId={partnerMallId}
+          onSelect={setPartnerMallId}
+          onTeamsChanged={() => { refetchTeams(); }}
+          variant="token"
+        />
       </Section>
 
       <Section title="고객 정보">

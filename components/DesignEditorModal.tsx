@@ -8,7 +8,7 @@ import { useFontStore } from '@/store/useFontStore';
 import { createClient } from '@/lib/supabase-client';
 import { saveDesign } from '@/lib/designService';
 import { generateProductThumbnail } from '@/lib/thumbnailGenerator';
-import type { ProductConfig } from '@/types/types';
+import type { ProductConfig, ProductColor } from '@/types/types';
 import type { SavedDesignRow } from '@/hooks/useSavedDesigns';
 
 // Dynamically import ProductDesigner to avoid SSR issues with Fabric.js
@@ -18,27 +18,19 @@ const ProductDesigner = dynamic(
 );
 
 interface DesignEditorModalProps {
-  /** Product ID to design for */
   productId: string;
-  /** Optional initial product color hex */
   initialColor?: string;
-  /** Called when design is saved successfully */
   onSaveComplete: (design: SavedDesignRow) => void;
-  /** Called when the user cancels / closes without saving */
   onClose: () => void;
 }
 
 /**
- * Full-screen in-app design editor modal.
- * Phase 7: replaces the window.open() to admin.modoogoods.com/editor.
+ * Full-screen in-app design editor modal (Phase 7).
+ * Replaces window.open() to admin.modoogoods.com/editor.
  *
- * Opens as a z-[9000] overlay, fetches product configuration,
- * mounts ProductDesigner (Fabric.js canvas), and saves the resulting
- * design to saved_designs on "저장".
- *
- * The Toolbar component renders its own fixed header (z-100) which is
- * visually hidden behind this modal's header (z-[200]), so only our
- * [닫기] / [저장] buttons are visible to the user.
+ * Features: Fabric.js canvas, background removal, anchor presets,
+ * product color selection. The Toolbar's fixed z-100 header is
+ * visually covered by this modal's header at z-[200] (same stacking context).
  */
 export default function DesignEditorModal({
   productId,
@@ -51,6 +43,10 @@ export default function DesignEditorModal({
   const [configError, setConfigError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Product colors
+  const [productColors, setProductColors] = useState<ProductColor[]>([]);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+
   const {
     setEditMode,
     setActiveSide,
@@ -61,7 +57,7 @@ export default function DesignEditorModal({
     resetCanvasState,
   } = useCanvasStore();
 
-  // Fetch product configuration from Supabase
+  // Fetch product configuration and available colors
   useEffect(() => {
     let cancelled = false;
 
@@ -70,27 +66,58 @@ export default function DesignEditorModal({
       setConfigError(null);
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
-          .from('products')
-          .select('id, configuration')
-          .eq('id', productId)
-          .single();
+
+        const [productResult, colorsResult] = await Promise.all([
+          supabase
+            .from('products')
+            .select('id, configuration')
+            .eq('id', productId)
+            .single(),
+          supabase
+            .from('product_colors')
+            .select('*, manufacturer_colors (id, name, hex, color_code)')
+            .eq('product_id', productId)
+            .eq('is_active', true)
+            .order('sort_order'),
+        ]);
 
         if (cancelled) return;
-        if (error || !data) throw error ?? new Error('Product not found');
+        if (productResult.error || !productResult.data) {
+          throw productResult.error ?? new Error('Product not found');
+        }
 
         const config: ProductConfig = {
-          productId: data.id,
-          sides: (data.configuration as any) ?? [],
+          productId: productResult.data.id,
+          sides: (productResult.data.configuration as any) ?? [],
         };
 
         setProductConfig(config);
+
         if (config.sides.length > 0) {
           setActiveSide(config.sides[0].id);
         }
-        if (initialColor) {
+
+        // Colors
+        if (!colorsResult.error && colorsResult.data) {
+          const colors = colorsResult.data.map((item) => ({
+            ...item,
+            manufacturer_colors: item.manufacturer_colors as unknown as ProductColor['manufacturer_colors'],
+          })) as ProductColor[];
+          colors.sort((a, b) =>
+            (a.manufacturer_colors?.color_code || '').localeCompare(b.manufacturer_colors?.color_code || ''),
+          );
+          setProductColors(colors);
+
+          // Set initial color: prop > first available color > white
+          if (initialColor) {
+            setProductColor(initialColor);
+          } else if (colors.length > 0) {
+            setProductColor(colors[0].manufacturer_colors.hex);
+          }
+        } else if (initialColor) {
           setProductColor(initialColor);
         }
+
         setEditMode(true);
       } catch (e) {
         if (!cancelled) {
@@ -103,14 +130,11 @@ export default function DesignEditorModal({
     };
 
     fetchConfig();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
-  // Cleanup canvas state when modal unmounts
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       resetCanvasState();
@@ -141,7 +165,6 @@ export default function DesignEditorModal({
         throw new Error('저장 실패');
       }
 
-      // Convert SavedDesign → SavedDesignRow for addItemFromDesign compatibility
       const designRow: SavedDesignRow = {
         id: result.id,
         product_id: result.product_id,
@@ -162,13 +185,17 @@ export default function DesignEditorModal({
     }
   };
 
+  const hasColorOptions = productColors.length > 0;
+  const selectedColorHex = productColor ?? '#FFFFFF';
+  const selectedColorName =
+    productColors.find((c) => c.manufacturer_colors.hex === selectedColorHex)
+      ?.manufacturer_colors.name ?? '색상';
+
   return (
     <div className="fixed inset-0 z-[9000] bg-white flex flex-col">
       {/*
-        Modal header at z-[200].
-        The Toolbar component renders its own "fixed top-0 left-0 z-100" header;
-        that header is a child of this modal's stacking context, so z-[200] here
-        visually covers it — users see only our [닫기] / [저장] buttons.
+        Modal header at z-[200] covers Toolbar's "fixed top-0 left-0 z-100" header
+        (child of same stacking context) — only [닫기] and [저장] are visible.
       */}
       <div
         className="relative z-[200] flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0"
@@ -217,9 +244,70 @@ export default function DesignEditorModal({
             config={productConfig}
             layout="mobile"
             onExitEditMode={onClose}
+            onColorPress={hasColorOptions ? () => setColorPickerOpen(true) : undefined}
+            displayColor={selectedColorHex}
+            hasColorOptions={hasColorOptions}
           />
         ) : null}
       </div>
+
+      {/* Color picker bottom sheet */}
+      {colorPickerOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-[9100]"
+            onClick={() => setColorPickerOpen(false)}
+          />
+          <div className="fixed bottom-0 inset-x-0 z-[9200] bg-white rounded-t-2xl shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-semibold text-base">색상 선택</h3>
+              <button
+                onClick={() => setColorPickerOpen(false)}
+                className="text-gray-500 hover:text-gray-800 text-xl leading-none px-2"
+              >×</button>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-6 gap-3">
+                {productColors.map((c) => {
+                  const hex = c.manufacturer_colors.hex;
+                  const isSelected = hex === selectedColorHex;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setProductColor(hex);
+                        setColorPickerOpen(false);
+                      }}
+                      className="flex flex-col items-center gap-1"
+                      title={c.manufacturer_colors.name}
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-full border-2 transition-all ${
+                          isSelected
+                            ? 'border-black scale-110 shadow-md'
+                            : 'border-gray-300 hover:border-gray-500'
+                        }`}
+                        style={{ backgroundColor: hex }}
+                      />
+                      <span className={`text-[10px] leading-tight text-center truncate w-12 ${
+                        isSelected ? 'font-bold text-gray-900' : 'text-gray-500'
+                      }`}>
+                        {c.manufacturer_colors.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedColorName && (
+                <p className="mt-3 text-xs text-center text-gray-600">
+                  선택: <span className="font-semibold text-gray-900">{selectedColorName}</span>
+                </p>
+              )}
+            </div>
+            <div className="pb-safe h-6" />
+          </div>
+        </>
+      )}
     </div>
   );
 }

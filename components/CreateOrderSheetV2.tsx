@@ -290,7 +290,7 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
         customer_email: customerEmail.trim() || null,
         shipping_method: shippingMethod,
         partner_mall_id: partnerMallId,
-        attributed_salesman_id: user.salesman_profile_id,
+        salesman_id: user.salesman_profile_id,
         payment_link_token: paymentLinkToken,
         customer_note: customerNote.trim() || null,
         order_category: 'salesman_direct',

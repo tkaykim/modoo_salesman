@@ -17,7 +17,7 @@ export function useTeam(teamId: string | null | undefined): {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('partner_malls')
-        .select('id, name, slug, share_token, logo_url, is_active, created_at, owner_salesman_id, team_meta')
+        .select('id, name, slug, share_token, logo_url, is_active, created_at, salesman_id, team_meta')
         .eq('id', teamId!)
         .maybeSingle();
       if (error) throw error;

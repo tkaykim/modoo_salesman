@@ -181,7 +181,7 @@ export default function CreateTeamSheet({ open, onClose, onCreated, editTeamId }
           name: name.trim(),
           logo_url: '',
           is_active: false, // light 모드로 시작
-          owner_salesman_id: user.salesman_profile_id,
+          salesman_id: user.salesman_profile_id,
           team_meta: meta as unknown as Record<string, unknown>,
         });
         if (insErr) throw insErr;

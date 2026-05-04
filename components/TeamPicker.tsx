@@ -86,7 +86,7 @@ export default function TeamPicker({
           name,
           logo_url: '',
           is_active: false,
-          owner_salesman_id: user.salesman_profile_id,
+          salesman_id: user.salesman_profile_id,
           team_meta: {},
         })
         .select('id')

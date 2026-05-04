@@ -42,7 +42,7 @@ export function useMyRevenue(): MyRevenueResult {
       const { data, error } = await supabase
         .from('orders')
         .select('id, total_amount, created_at')
-        .eq('attributed_salesman_id', salesmanId!)
+        .eq('salesman_id', salesmanId!)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as OrderRow[];

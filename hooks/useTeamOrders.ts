@@ -13,7 +13,7 @@ export interface TeamOrderRow {
   customer_name: string | null;
   customer_phone: string | null;
   shipping_method: string | null;
-  attributed_salesman_id: string | null;
+  salesman_id: string | null;
   applied_coupon_id: string | null;
   notes: string | null;
   created_at: string;
@@ -28,7 +28,7 @@ export function useTeamOrders(teamId: string | null | undefined) {
       const { data, error } = await supabase
         .from('orders')
         .select(
-          'id, total_amount, original_amount, coupon_discount, payment_status, order_status, customer_name, customer_phone, shipping_method, attributed_salesman_id, applied_coupon_id, notes, created_at'
+          'id, total_amount, original_amount, coupon_discount, payment_status, order_status, customer_name, customer_phone, shipping_method, salesman_id, applied_coupon_id, notes, created_at'
         )
         .eq('partner_mall_id', teamId!)
         .order('created_at', { ascending: false })

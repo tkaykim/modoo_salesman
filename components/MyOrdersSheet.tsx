@@ -23,8 +23,8 @@ export default function MyOrdersSheet({ open, onClose }: Props) {
       .filter((o) => {
         if (filter === 'paid') return o.payment_status === 'completed' || o.payment_status === 'paid';
         if (filter === 'pending') return o.payment_status === 'pending';
-        if (filter === 'mine') return !!o.attributed_salesman_id; // 본인에게 귀속된 매출
-        if (filter === 'mall_only') return !o.attributed_salesman_id && !!o.partner_mall_id; // mall 경유 미귀속 (본사 직판)
+        if (filter === 'mine') return !!o.salesman_id; // 본인에게 귀속된 매출
+        if (filter === 'mall_only') return !o.salesman_id && !!o.partner_mall_id; // mall 경유 미귀속 (본사 직판)
         return true;
       })
       .filter((o) => {
@@ -43,8 +43,8 @@ export default function MyOrdersSheet({ open, onClose }: Props) {
       all: orders.length,
       paid: orders.filter((o) => o.payment_status === 'completed' || o.payment_status === 'paid').length,
       pending: orders.filter((o) => o.payment_status === 'pending').length,
-      mine: orders.filter((o) => !!o.attributed_salesman_id).length,
-      mall_only: orders.filter((o) => !o.attributed_salesman_id && !!o.partner_mall_id).length,
+      mine: orders.filter((o) => !!o.salesman_id).length,
+      mall_only: orders.filter((o) => !o.salesman_id && !!o.partner_mall_id).length,
     }),
     [orders]
   );
@@ -155,7 +155,7 @@ function OrderCard({ order }: { order: MyOrderRow }) {
     }
   })();
 
-  const isMine = !!order.attributed_salesman_id;
+  const isMine = !!order.salesman_id;
 
   return (
     <Card padding="md">

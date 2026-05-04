@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       const { data: ord, error: oErr } = await supabase
         .from('orders')
         .select('total_amount, created_at')
-        .eq('attributed_salesman_id', sm.id)
+        .eq('salesman_id', sm.id)
         .gte('created_at', start)
         .lt('created_at', end);
       if (oErr) {

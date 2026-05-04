@@ -42,7 +42,7 @@ export interface PartnerMallRow {
   logo_url: string | null;
   is_active: boolean | null;
   created_at: string | null;
-  owner_salesman_id: string | null;
+  salesman_id: string | null;
   team_meta: TeamMeta | null;
 }
 
@@ -141,7 +141,7 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
     note: meta.note ?? null,
     address: meta.address ?? null,
     contacts,
-    ownerSalesmanId: row.owner_salesman_id,
+    ownerSalesmanId: row.salesman_id,
     createdAt: row.created_at,
     totalOrders: agg.totalOrders,
     totalRevenue: agg.totalRevenue,

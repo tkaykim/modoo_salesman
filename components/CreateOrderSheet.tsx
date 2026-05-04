@@ -221,7 +221,7 @@ export default function CreateOrderSheet({ open, onClose, onCreated, preselected
         customer_email: customerEmail.trim() || null,
         shipping_method: deliveryMethod,
         partner_mall_id: partnerMallId,
-        attributed_salesman_id: user.salesman_profile_id,
+        salesman_id: user.salesman_profile_id,
         notes: notes.trim() || null,
         order_category: 'salesman_direct',
       };

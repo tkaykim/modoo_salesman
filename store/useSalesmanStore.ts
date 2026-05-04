@@ -14,7 +14,7 @@ export interface SalesmanData {
   role: 'salesman';
   grade?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
   salesman_code?: string;
-  // salesman_profiles.id — partner_malls.owner_salesman_id 등 FK 사용
+  // salesman_profiles.id — partner_malls.salesman_id 등 FK 사용
   salesman_profile_id?: string;
   joined_at?: string;
 }

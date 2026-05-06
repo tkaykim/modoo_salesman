@@ -30,7 +30,10 @@ interface OrderItemDraft {
   productId: string;
   productTitle: string;
   productThumbnail: string | null;
-  designId: string | null;            // null = 디자인 미연결 (새 디자인 작업 중 또는 placeholder)
+  /** saved_designs.id — 새/기존 디자인 흐름에서 채움 */
+  designId: string | null;
+  /** partner_mall_products.id — 단체 진열 기반 진입에서 채움 */
+  partnerMallProductId: string | null;
   designTitle: string | null;
   designPreviewUrl: string | null;
   basePrice: number;
@@ -41,14 +44,34 @@ interface OrderItemDraft {
   designPricePerItem: number | null;
 }
 
-type Step = 'items' | 'product-pick-new' | 'product-pick-existing' | 'design-pick' | 'details';
+type Step = 'items' | 'product-pick-new' | 'design-pick' | 'details';
 type PaymentType = 'completed' | 'bank_transfer' | 'customer_payment';
+
+/**
+ * 단체 진열에서 선택한 partner_mall_products를 초기 items로 변환할 수 있게 하는 외부 입력.
+ * useTeamProducts의 row 모양과 호환.
+ */
+export interface InitialMallProduct {
+  id: string;                  // partner_mall_product.id (참고용)
+  product_id: string;
+  display_name: string | null;
+  color_hex: string | null;
+  color_name: string | null;
+  color_code: string | null;
+  preview_url: string | null;
+  price: number | null;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: (orderId: string, paymentLinkUrl: string | null) => void;
   preselectedTeamId?: string | null;
+  /**
+   * 진열 기반 진입: 외부에서 선택한 partner_mall_products 목록.
+   * 있으면 product-pick 단계 건너뛰고 'items' 단계에서 즉시 사이즈/수량 입력 가능.
+   */
+  initialMallProducts?: InitialMallProduct[];
 }
 
 function newUid() {
@@ -74,7 +97,13 @@ function getItemSubtotal(item: OrderItemDraft): number {
   return getItemUnit(item) * getItemQty(item);
 }
 
-export default function CreateOrderSheetV2({ open, onClose, onCreated, preselectedTeamId }: Props) {
+export default function CreateOrderSheetV2({
+  open,
+  onClose,
+  onCreated,
+  preselectedTeamId,
+  initialMallProducts,
+}: Props) {
   const { user } = useSalesmanStore();
   const { products, isLoading: productsLoading } = useProducts();
   const { primary: primaryCoupon } = useMyCoupons();
@@ -127,6 +156,52 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
     }
   }, [open, preselectedTeamId]);
 
+  // 진열 기반 진입: open 시점에 initialMallProducts가 있으면 products fetch 완료 후 OrderItemDraft로 변환해 채움
+  const initialMallProductsKey = useMemo(
+    () => (initialMallProducts ?? []).map((p) => p.id).join('|'),
+    [initialMallProducts],
+  );
+  useEffect(() => {
+    if (!open) return;
+    if (!initialMallProducts || initialMallProducts.length === 0) return;
+    if (productsLoading) return;
+    if (products.length === 0) return;
+    // 이미 채워졌으면 스킵 (open 후 한 번만)
+    if (items.length > 0) return;
+
+    const newItems: OrderItemDraft[] = [];
+    for (const mp of initialMallProducts) {
+      const prod = products.find((p) => p.id === mp.product_id);
+      if (!prod) continue;
+      const sizeOpts = prod.size_options ?? [];
+      newItems.push({
+        uid: newUid(),
+        productId: prod.id,
+        productTitle: mp.display_name || prod.title,
+        productThumbnail: mp.preview_url ?? prod.thumbnail_image_link?.[0] ?? null,
+        designId: null,
+        partnerMallProductId: mp.id,
+        designTitle: mp.display_name,
+        designPreviewUrl: mp.preview_url,
+        basePrice: Number(prod.base_price) || 0,
+        sizeOptions: sizeOpts,
+        variants:
+          sizeOpts.length > 0
+            ? sizeOpts.map((s) => ({ sizeLabel: s.label, sizeCode: s.size_code, quantity: 0 }))
+            : [{ sizeLabel: 'FREE', sizeCode: 'FREE', quantity: 0 }],
+        pricingMode: 'auto',
+        customUnitPrice: '',
+        designPricePerItem: mp.price && mp.price > 0 ? mp.price : null,
+      });
+    }
+    if (newItems.length > 0) {
+      setItems(newItems);
+      setExpandedUid(newItems[0].uid);
+      setStep('items');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, productsLoading, products.length, initialMallProductsKey]);
+
   // 가격 계산
   const orderSubtotal = useMemo(() => items.reduce((s, it) => s + getItemSubtotal(it), 0), [items]);
   const totalQty = useMemo(() => items.reduce((s, it) => s + getItemQty(it), 0), [items]);
@@ -155,34 +230,6 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
   const goExistingDesign = () => {
     setStep('design-pick');
   };
-  const goAddProductOnly = () => {
-    setProductSearch('');
-    setStep('product-pick-existing');
-  };
-
-  const addProductWithoutDesign = (p: ProductRow) => {
-    const sizeOpts = p.size_options ?? [];
-    const item: OrderItemDraft = {
-      uid: newUid(),
-      productId: p.id,
-      productTitle: p.title,
-      productThumbnail: p.thumbnail_image_link?.[0] ?? null,
-      designId: null,
-      designTitle: null,
-      designPreviewUrl: null,
-      basePrice: Number(p.base_price) || 0,
-      sizeOptions: sizeOpts,
-      variants: sizeOpts.length > 0
-        ? sizeOpts.map((s) => ({ sizeLabel: s.label, sizeCode: s.size_code, quantity: 0 }))
-        : [{ sizeLabel: 'FREE', sizeCode: 'FREE', quantity: 0 }],
-      pricingMode: 'auto',
-      customUnitPrice: '',
-      designPricePerItem: null,
-    };
-    setItems((prev) => [...prev, item]);
-    setExpandedUid(item.uid);
-    setStep('items');
-  };
 
   const openInAppEditor = (p: ProductRow) => {
     // Phase 7: in-app full-screen editor modal — no tab switch needed
@@ -205,6 +252,7 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
         productTitle: product.title,
         productThumbnail: product.thumbnail_image_link?.[0] ?? null,
         designId: d.id,
+        partnerMallProductId: null,
         designTitle: d.title,
         designPreviewUrl: d.preview_url,
         basePrice: Number(product.base_price) || 0,
@@ -299,26 +347,112 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
       const { error: orderErr } = await supabase.from('orders').insert(orderRow);
       if (orderErr) throw new Error(`주문 등록 실패: ${orderErr.message}`);
 
+      // 디자인/진열 풀 데이터 fetch — modoo_admin/modoo_app과 동일한 방식으로 order_items에 보존
+      // (canvas_state, color_selections, image_urls, text_svg_exports, custom_fonts, retouch_requested)
+      type DesignBundle = {
+        canvas_state: Record<string, unknown>;
+        color_selections: Record<string, unknown>;
+        image_urls: Record<string, unknown>;
+        text_svg_exports: Record<string, unknown> | null;
+        custom_fonts: unknown[];
+        retouch_requested: boolean;
+        preview_url: string | null;
+        title: string | null;
+      };
+      const designsMap = new Map<string, DesignBundle>();
+      const mallProductsMap = new Map<string, DesignBundle>();
+
+      const designIds = Array.from(
+        new Set(items.map((it) => it.designId).filter((v): v is string => !!v)),
+      );
+      const mallProductIds = Array.from(
+        new Set(
+          items.map((it) => it.partnerMallProductId).filter((v): v is string => !!v),
+        ),
+      );
+
+      if (designIds.length > 0) {
+        const { data: designs } = await supabase
+          .from('saved_designs')
+          .select(
+            'id, title, color_selections, canvas_state, preview_url, image_urls, text_svg_exports, custom_fonts, retouch_requested',
+          )
+          .in('id', designIds);
+        for (const d of designs ?? []) {
+          designsMap.set(d.id, {
+            canvas_state: (d.canvas_state as Record<string, unknown>) ?? {},
+            color_selections: (d.color_selections as Record<string, unknown>) ?? {},
+            image_urls: (d.image_urls as Record<string, unknown>) ?? {},
+            text_svg_exports:
+              (d.text_svg_exports as Record<string, unknown> | null) ?? null,
+            custom_fonts: (d.custom_fonts as unknown[]) ?? [],
+            retouch_requested: (d.retouch_requested as boolean) ?? false,
+            preview_url: (d.preview_url as string | null) ?? null,
+            title: (d.title as string | null) ?? null,
+          });
+        }
+      }
+      if (mallProductIds.length > 0) {
+        const { data: mallProducts } = await supabase
+          .from('partner_mall_products')
+          .select(
+            'id, display_name, color_hex, color_name, color_code, canvas_state, preview_url',
+          )
+          .in('id', mallProductIds);
+        for (const m of mallProducts ?? []) {
+          mallProductsMap.set(m.id, {
+            canvas_state: (m.canvas_state as Record<string, unknown>) ?? {},
+            color_selections: {
+              productColor: (m.color_hex as string | null) ?? null,
+              colorName: (m.color_name as string | null) ?? null,
+              colorCode: (m.color_code as string | null) ?? null,
+            },
+            image_urls: {},
+            text_svg_exports: null,
+            custom_fonts: [],
+            retouch_requested: false,
+            preview_url: (m.preview_url as string | null) ?? null,
+            title: (m.display_name as string | null) ?? null,
+          });
+        }
+      }
+
       const itemRows = items.map((it) => {
         const qty = getItemQty(it);
         const unit = getItemUnit(it);
         const variants = it.variants
           .filter((v) => v.quantity > 0)
           .map((v) => ({ size_id: v.sizeCode, size_name: v.sizeLabel, quantity: v.quantity }));
+        const bundle: DesignBundle | null =
+          (it.designId ? designsMap.get(it.designId) : null) ??
+          (it.partnerMallProductId ? mallProductsMap.get(it.partnerMallProductId) : null) ??
+          null;
         return {
           order_id: orderId,
           product_id: it.productId,
           product_title: it.productTitle,
           design_id: it.designId,
-          design_title: it.designTitle,
+          design_title: it.designTitle ?? bundle?.title ?? null,
           quantity: qty,
           price_per_item: unit,
-          canvas_state: {},
-          color_selections: {},
-          item_options: { variants, source: 'salesman_app_v2' },
-          thumbnail_url: it.designPreviewUrl ?? it.productThumbnail,
+          // modoo_admin/modoo_app order_items와 동일한 디자인 데이터 보존
+          canvas_state: bundle?.canvas_state ?? {},
+          color_selections: bundle?.color_selections ?? {},
+          image_urls: bundle?.image_urls ?? {},
+          text_svg_exports: bundle?.text_svg_exports ?? undefined,
+          custom_fonts: bundle?.custom_fonts ?? [],
+          retouch_requested: bundle?.retouch_requested ?? false,
+          item_options: {
+            variants,
+            source: 'salesman_app_v2',
+            // 진열 기반은 partner_mall_product.id를 보존 (사후 조회용)
+            partner_mall_product_id: it.partnerMallProductId,
+          },
+          thumbnail_url:
+            it.designPreviewUrl ?? bundle?.preview_url ?? it.productThumbnail,
           purchase_order_status: 'pending',
-          design_status: it.designId ? 'pending' : 'design_required',
+          // designId가 없어도 designTitle/진열 있으면 디자인 있는 것으로 간주
+          design_status: it.designId || it.designTitle ? 'pending' : 'design_required',
         };
       });
 
@@ -364,7 +498,6 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
           <h2 className="text-[15px] font-bold text-[var(--color-ink)] flex-1 text-center">
             {step === 'items' && '주문 생성'}
             {step === 'product-pick-new' && '새 디자인 — 제품 선택'}
-            {step === 'product-pick-existing' && '제품만 추가'}
             {step === 'design-pick' && '기존 디자인 가져오기'}
             {step === 'details' && '결제 · 고객 정보'}
           </h2>
@@ -383,7 +516,6 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
               removeItem={removeItem}
               onNewDesign={goNewDesign}
               onExistingDesign={goExistingDesign}
-              onAddProductOnly={goAddProductOnly}
             />
           )}
           {step === 'product-pick-new' && (
@@ -393,21 +525,9 @@ export default function CreateOrderSheetV2({ open, onClose, onCreated, preselect
               onSearchChange={setProductSearch}
               onPick={openInAppEditor}
               isLoading={productsLoading}
-              hint="제품을 선택하면 인앱 에디터로 바로 디자인을 시작합니다. 저장하면 자동으로 품목에 추가됩니다."
+              hint="제품을 선택하면 인앱 에디터로 바로 디자인을 시작합니다. 저장하면 자동으로 품목에 추가됩니다. (디자인 없이 그냥 저장해도 됩니다.)"
               actionLabel="디자인 시작"
               actionIcon="arrow-up-r"
-            />
-          )}
-          {step === 'product-pick-existing' && (
-            <ProductPicker
-              products={filteredProducts}
-              search={productSearch}
-              onSearchChange={setProductSearch}
-              onPick={addProductWithoutDesign}
-              isLoading={productsLoading}
-              hint="디자인 없이 제품/사이즈/수량으로만 등록 (디자인은 추후 보강 가능)."
-              actionLabel="추가"
-              actionIcon="plus"
             />
           )}
           {step === 'design-pick' && (
@@ -522,7 +642,6 @@ function ItemsStep({
   removeItem,
   onNewDesign,
   onExistingDesign,
-  onAddProductOnly,
 }: {
   items: OrderItemDraft[];
   expandedUid: string | null;
@@ -531,14 +650,12 @@ function ItemsStep({
   removeItem: (uid: string) => void;
   onNewDesign: () => void;
   onExistingDesign: () => void;
-  onAddProductOnly: () => void;
 }) {
   return (
     <div className="p-4 space-y-3">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <ActionTile icon="palette" label="새 디자인" desc="에디터로 작업" onClick={onNewDesign} />
         <ActionTile icon="image" label="기존 디자인" desc="저장된 작업 검색" onClick={onExistingDesign} />
-        <ActionTile icon="package" label="제품만" desc="디자인 없이" onClick={onAddProductOnly} />
       </div>
 
       {items.length === 0 ? (
@@ -549,7 +666,7 @@ function ItemsStep({
             </div>
             <p className="text-[13px] font-bold text-[var(--color-ink)] mb-1">품목을 추가해주세요</p>
             <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-              위 3가지 방법 중 선택해 다품목을 추가할 수 있습니다.
+              새 디자인 또는 저장된 디자인으로 품목을 추가합니다. 디자인이 비어 있어도 그대로 저장하면 디자인 없이 주문할 수 있어요.
             </p>
           </div>
         </Card>
@@ -626,7 +743,7 @@ function ItemEditor({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-[var(--color-ink)] truncate">{item.productTitle}</p>
           <p className="text-[11px] text-[var(--color-muted)] truncate">
-            {item.designId ? (item.designTitle ?? '디자인 적용') : <span className="text-[var(--color-warn)]">디자인 미연결</span>}
+            {item.designTitle ?? '디자인 적용'}
           </p>
           <p className="text-[10px] text-[var(--color-faint)] font-mono mt-0.5">
             {qty}개 × {fmt(unit)} = {fmt(sub)}

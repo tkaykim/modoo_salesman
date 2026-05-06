@@ -20,8 +20,13 @@ const ProductDesigner = dynamic(
 interface DesignEditorModalProps {
   productId: string;
   initialColor?: string;
-  onSaveComplete: (design: SavedDesignRow) => void;
+  onSaveComplete: (design: SavedDesignRow, meta?: { title: string }) => void;
   onClose: () => void;
+  /**
+   * 저장 직전 호출. null 반환 시 저장 취소.
+   * 반환된 title이 saveDesign과 onSaveComplete의 meta.title 양쪽에 사용됨.
+   */
+  onBeforeSave?: () => Promise<{ title: string } | null>;
 }
 
 /**
@@ -37,6 +42,7 @@ export default function DesignEditorModal({
   initialColor,
   onSaveComplete,
   onClose,
+  onBeforeSave,
 }: DesignEditorModalProps) {
   const [productConfig, setProductConfig] = useState<ProductConfig | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -145,6 +151,14 @@ export default function DesignEditorModal({
 
   const handleSave = async () => {
     if (!productConfig || saving) return;
+
+    let resolvedTitle: string | undefined = undefined;
+    if (onBeforeSave) {
+      const decision = await onBeforeSave();
+      if (decision === null) return; // 사용자가 취소
+      resolvedTitle = decision.title;
+    }
+
     setSaving(true);
     try {
       const canvasState = saveAllCanvasState();
@@ -154,6 +168,7 @@ export default function DesignEditorModal({
 
       const result = await saveDesign({
         productId: productConfig.productId,
+        title: resolvedTitle,
         productColor: productColor ?? '#FFFFFF',
         canvasState,
         previewImage: thumbnail || undefined,
@@ -176,7 +191,7 @@ export default function DesignEditorModal({
         updated_at: result.updated_at,
       };
 
-      onSaveComplete(designRow);
+      onSaveComplete(designRow, resolvedTitle ? { title: resolvedTitle } : undefined);
     } catch (e) {
       console.error('[DesignEditorModal] save error:', e);
       alert('디자인 저장 중 오류가 발생했습니다.');

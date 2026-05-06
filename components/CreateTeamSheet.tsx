@@ -177,10 +177,14 @@ export default function CreateTeamSheet({ open, onClose, onCreated, editTeamId }
           .eq('id', editTeamId);
         if (updErr) throw updErr;
       } else {
+        const shareToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
         const { error: insErr } = await supabase.from('partner_malls').insert({
           name: name.trim(),
           logo_url: '',
-          is_active: false, // light 모드로 시작
+          is_active: true,
+          share_token: shareToken,
           salesman_id: user.salesman_profile_id,
           team_meta: meta as unknown as Record<string, unknown>,
         });

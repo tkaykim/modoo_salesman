@@ -11,13 +11,12 @@ import { getGrade } from '@/lib/grades';
 import type { Team } from '@/lib/teams';
 import { AppBar, TabBar, NavSpacer, Card, Section, HairLine, Icon, Chip, type IconName } from '@/components/ui';
 import CreateTeamSheet from '@/components/CreateTeamSheet';
-import CreateOrderSheet from '@/components/CreateOrderSheet';
-import CreateOrderSheetV2 from '@/components/CreateOrderSheetV2';
+import CreateOrderSheetV2, { type InitialMallProduct } from '@/components/CreateOrderSheetV2';
 import PerformanceTab from '@/components/PerformanceTab';
 import TeamDetailSheet from '@/components/TeamDetailSheet';
 import MyOrdersSheet from '@/components/MyOrdersSheet';
 import PriceCalculatorSheet from '@/components/PriceCalculatorSheet';
-import NewOrderChooser from '@/components/NewOrderChooser';
+import type { TeamProductRow } from '@/hooks/useTeamProducts';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -25,13 +24,27 @@ type Tab = 'home' | 'crm' | 'performance' | 'more';
 
 export default function MobileApp() {
   const [tab, setTab] = useState<Tab>('home');
-  const [orderModal, setOrderModal] = useState<{ open: boolean; teamId: string | null }>({ open: false, teamId: null });
   const [lastCreatedOrderId, setLastCreatedOrderId] = useState<string | null>(null);
   const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
-  const [chooserOpen, setChooserOpen] = useState(false);
-  const [orderV2, setOrderV2] = useState<{ open: boolean; teamId: string | null }>({ open: false, teamId: null });
+  const [orderV2, setOrderV2] = useState<{
+    open: boolean;
+    teamId: string | null;
+    initialMallProducts: InitialMallProduct[];
+  }>({ open: false, teamId: null, initialMallProducts: [] });
+
+  const teamProductsToInitial = (rows: TeamProductRow[] | undefined): InitialMallProduct[] =>
+    (rows ?? []).map((p) => ({
+      id: p.id,
+      product_id: p.product_id,
+      display_name: p.display_name,
+      color_hex: p.color_hex,
+      color_name: p.color_name,
+      color_code: null,
+      preview_url: p.preview_url,
+      price: p.price,
+    }));
   const [paymentLinkInfo, setPaymentLinkInfo] = useState<{ orderId: string; url: string } | null>(null);
 
   const { user } = useSalesmanStore();
@@ -98,7 +111,7 @@ export default function MobileApp() {
                 totalRevenue={totalRevenue}
                 teams={teams}
                 reorderDue={reorderDue}
-                onCreateOrder={() => setChooserOpen(true)}
+                onCreateOrder={() => setOrderV2({ open: true, teamId: null, initialMallProducts: [] })}
                 onOpenCalculator={() => setCalcOpen(true)}
                 onNavigate={setTab}
               />
@@ -106,7 +119,9 @@ export default function MobileApp() {
             {tab === 'crm' && (
               <CrmTab
                 teams={teams}
-                onCreateOrderForTeam={(teamId) => setOrderModal({ open: true, teamId })}
+                onCreateOrderForTeam={(teamId) =>
+                  setOrderV2({ open: true, teamId, initialMallProducts: [] })
+                }
                 onOpenDetail={(teamId) => setDetailTeamId(teamId)}
                 onTeamMutate={refetchTeams}
               />
@@ -116,7 +131,7 @@ export default function MobileApp() {
           </NavSpacer>
         </div>
 
-        {/* Bottom Nav */}
+        {/* Bottom Nav — 가운데 큰 버튼으로 어디서든 새 주문 생성 가능 */}
         <TabBar<Tab>
           active={tab}
           onChange={setTab}
@@ -126,15 +141,10 @@ export default function MobileApp() {
             { id: 'performance', icon: 'wallet', label: '실적' },
             { id: 'more', icon: 'menu', label: '더보기' },
           ]}
-        />
-
-        <CreateOrderSheet
-          open={orderModal.open}
-          preselectedTeamId={orderModal.teamId}
-          onClose={() => setOrderModal({ open: false, teamId: null })}
-          onCreated={(orderId) => {
-            setLastCreatedOrderId(orderId);
-            refetchTeams();
+          primaryAction={{
+            icon: 'cart',
+            label: '주문',
+            onClick: () => setOrderV2({ open: true, teamId: null, initialMallProducts: [] }),
           }}
         />
 
@@ -142,9 +152,13 @@ export default function MobileApp() {
           open={!!detailTeamId}
           teamId={detailTeamId}
           onClose={() => setDetailTeamId(null)}
-          onCreateOrder={(teamId) => {
+          onCreateOrder={(teamId, selectedProducts) => {
             setDetailTeamId(null);
-            setOrderModal({ open: true, teamId });
+            setOrderV2({
+              open: true,
+              teamId,
+              initialMallProducts: teamProductsToInitial(selectedProducts),
+            });
           }}
           onEdit={(teamId) => {
             setDetailTeamId(null);
@@ -164,17 +178,13 @@ export default function MobileApp() {
 
         <PriceCalculatorSheet open={calcOpen} onClose={() => setCalcOpen(false)} />
 
-        <NewOrderChooser
-          open={chooserOpen}
-          onClose={() => setChooserOpen(false)}
-          onFullOrder={() => setOrderV2({ open: true, teamId: null })}
-          onQuickQuote={() => setOrderModal({ open: true, teamId: null })}
-        />
-
         <CreateOrderSheetV2
           open={orderV2.open}
           preselectedTeamId={orderV2.teamId}
-          onClose={() => setOrderV2({ open: false, teamId: null })}
+          initialMallProducts={orderV2.initialMallProducts}
+          onClose={() =>
+            setOrderV2({ open: false, teamId: null, initialMallProducts: [] })
+          }
           onCreated={(orderId, paymentLinkUrl) => {
             setLastCreatedOrderId(orderId);
             if (paymentLinkUrl) setPaymentLinkInfo({ orderId, url: paymentLinkUrl });

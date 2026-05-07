@@ -20,7 +20,19 @@ function getSafeInternalRedirect(raw: string | null): string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useSalesmanStore();
+  const { login, signInWithOAuth } = useSalesmanStore();
+  const [oauthLoading, setOauthLoading] = useState<null | 'google' | 'kakao'>(null);
+
+  const handleOAuth = async (provider: 'google' | 'kakao') => {
+    setErrorMessage(null);
+    setOauthLoading(provider);
+    const result = await signInWithOAuth(provider);
+    if (!result.success) {
+      setOauthLoading(null);
+      setErrorMessage(result.error || '소셜 로그인에 실패했습니다.');
+    }
+    // 성공 시 Supabase가 OAuth 페이지로 리다이렉트하므로 이후 처리 불필요
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -150,6 +162,31 @@ function LoginForm() {
               {isSubmitting ? '로그인 중...' : '로그인'}
             </button>
           </form>
+
+          <div className="mt-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-[var(--color-hairline)]" />
+            <span className="text-[11px] text-[var(--color-faint)]">또는</span>
+            <div className="h-px flex-1 bg-[var(--color-hairline)]" />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <button
+              type="button"
+              onClick={() => handleOAuth('kakao')}
+              disabled={oauthLoading !== null}
+              className="w-full rounded-[12px] bg-[#FEE500] px-3 py-2.5 text-[14px] font-bold text-[#191919] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {oauthLoading === 'kakao' ? '연결 중...' : '카카오로 로그인'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuth('google')}
+              disabled={oauthLoading !== null}
+              className="w-full rounded-[12px] border border-[var(--color-hairline)] bg-white px-3 py-2.5 text-[14px] font-bold text-[var(--color-ink)] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {oauthLoading === 'google' ? '연결 중...' : 'Google로 로그인'}
+            </button>
+          </div>
         </div>
 
         <p className="text-center text-[11px] text-[var(--color-faint)] mt-6">

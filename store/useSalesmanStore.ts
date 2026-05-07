@@ -31,6 +31,7 @@ interface AuthState {
   updateUser: (updates: Partial<SalesmanData>) => void;
   setLoading: (loading: boolean) => void;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithOAuth: (provider: 'google' | 'kakao') => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useSalesmanStore = create<AuthState>()(
@@ -91,6 +92,48 @@ export const useSalesmanStore = create<AuthState>()(
 
           set({ isLoading: false });
           return { success: false, error: '로그인 실패' };
+        } catch (err) {
+          set({ isLoading: false });
+          return { success: false, error: (err as Error).message };
+        }
+      },
+
+      signInWithOAuth: async (provider) => {
+        try {
+          set({ isLoading: true });
+          const supabase = createClient();
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+          let returnTo = '/';
+          if (typeof window !== 'undefined') {
+            try {
+              const params = new URLSearchParams(window.location.search);
+              const raw = params.get('redirect');
+              if (raw) {
+                const decoded = decodeURIComponent(raw);
+                if (decoded.startsWith('/') && !decoded.startsWith('//')) {
+                  returnTo = decoded;
+                }
+              }
+            } catch {}
+            try {
+              document.cookie = `login_return_to=${encodeURIComponent(returnTo)}; path=/; max-age=3600; SameSite=Lax`;
+            } catch {}
+          }
+
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider,
+            options: {
+              redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+            },
+          });
+
+          if (error) {
+            set({ isLoading: false });
+            return { success: false, error: error.message };
+          }
+
+          return { success: true };
         } catch (err) {
           set({ isLoading: false });
           return { success: false, error: (err as Error).message };

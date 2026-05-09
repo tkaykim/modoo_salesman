@@ -150,20 +150,18 @@ export interface OrderItemDraft {
   basePrice: number;
   variants: OrderVariant[];
   prints: OrderPrint[];
-  customUnitPrice?: number;
 }
 
 export interface ItemPricing {
   totalQty: number;
-  productSubtotal: number;   // basePrice or customUnitPrice * totalQty
+  productSubtotal: number;   // basePrice * totalQty
   printSubtotal: number;     // sum of all prints
   itemTotal: number;
 }
 
 export function calcItemPricing(item: OrderItemDraft, config: PrintPricingConfig): ItemPricing {
   const totalQty = item.variants.reduce((s, v) => s + (Number(v.quantity) || 0), 0);
-  const unit = item.customUnitPrice && item.customUnitPrice > 0 ? item.customUnitPrice : item.basePrice;
-  const productSubtotal = unit * totalQty;
+  const productSubtotal = item.basePrice * totalQty;
   const printSubtotal = item.prints.reduce((s, p) => s + calcPrintTotal(config, p.method, p.size, totalQty), 0);
   return {
     totalQty,

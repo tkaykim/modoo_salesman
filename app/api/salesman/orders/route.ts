@@ -17,8 +17,8 @@ interface ItemPayload {
   productThumbnail?: string | null;
   partnerMallProductId?: string | null;
   variants: Array<{ sizeCode: string; sizeLabel: string; quantity: number }>;
-  // 클라가 받아 표시한 단가. 서버는 saved_designs/products/partner_mall_products와 교차 검증.
-  pricePerItem: number;
+  // @deprecated — 서버는 클라가 보낸 단가를 무시하고 saved_designs.price_per_item ?? products.base_price 를 권위값으로 사용한다.
+  pricePerItem?: number;
 }
 
 interface RequestBody {
@@ -48,8 +48,6 @@ const DELIVERY_FEE: Record<RequestBody['shippingMethod'], number> = {
   domestic: 3000,
   international: 5000,
 };
-
-const PRICE_TOLERANCE_KRW = 1;
 
 function buildOrderId() {
   const d = new Date();
@@ -200,33 +198,33 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3) 가격 검증 + subtotal 계산
+  // 3) 권위 단가 결정 + subtotal 계산
+  // 단가는 클라이언트가 보낸 값을 무시하고 서버가 결정한다:
+  //   - designId 가 있으면 saved_designs.price_per_item
+  //   - 없으면 products.base_price
+  // 둘 다 없으면 거부 (가격 미정 상품/디자인은 주문 불가).
   let subtotal = 0;
+  const authoritativePrices: number[] = [];
   for (const it of body.items) {
     const qty = (it.variants ?? []).reduce((s, v) => s + (Number(v.quantity) || 0), 0);
     if (!Number.isInteger(qty) || qty <= 0) {
       return NextResponse.json({ error: '품목 수량이 올바르지 않습니다.' }, { status: 400 });
     }
-    if (!Number.isFinite(it.pricePerItem) || it.pricePerItem < 0) {
-      return NextResponse.json({ error: '단가가 올바르지 않습니다.' }, { status: 400 });
-    }
+    let authoritativePrice: number | undefined;
     if (it.designId) {
-      const dbPrice = designPriceMap.get(it.designId);
-      if (typeof dbPrice === 'number' && it.pricePerItem + PRICE_TOLERANCE_KRW < dbPrice) {
-        return NextResponse.json(
-          { error: '저장된 디자인 단가보다 낮은 가격은 허용되지 않습니다.' },
-          { status: 400 },
-        );
-      }
+      authoritativePrice = designPriceMap.get(it.designId);
     }
-    const basePrice = basePriceMap.get(it.productId);
-    if (typeof basePrice === 'number' && it.pricePerItem + PRICE_TOLERANCE_KRW < basePrice) {
+    if (authoritativePrice == null) {
+      authoritativePrice = basePriceMap.get(it.productId);
+    }
+    if (typeof authoritativePrice !== 'number' || !Number.isFinite(authoritativePrice) || authoritativePrice < 0) {
       return NextResponse.json(
-        { error: '단가가 제품 기본가보다 낮습니다.' },
+        { error: '제품 또는 디자인 단가를 확인할 수 없습니다.' },
         { status: 400 },
       );
     }
-    subtotal += it.pricePerItem * qty;
+    authoritativePrices.push(authoritativePrice);
+    subtotal += authoritativePrice * qty;
   }
 
   const deliveryFee = DELIVERY_FEE[body.shippingMethod];
@@ -274,7 +272,7 @@ export async function POST(request: Request) {
     order_category: 'salesman_direct',
   };
 
-  const itemsJson = body.items.map((it) => {
+  const itemsJson = body.items.map((it, idx) => {
     const qty = (it.variants ?? []).reduce((s, v) => s + (Number(v.quantity) || 0), 0);
     const variants = (it.variants ?? [])
       .filter((v) => (v.quantity || 0) > 0)
@@ -287,7 +285,7 @@ export async function POST(request: Request) {
       design_id: it.designId ?? null,
       design_title: it.designTitle ?? designBundle?.title ?? mallBundle?.display_name ?? null,
       quantity: qty,
-      price_per_item: it.pricePerItem,
+      price_per_item: authoritativePrices[idx],
       canvas_state: designBundle?.canvas_state ?? mallBundle?.canvas_state ?? {},
       color_selections: designBundle?.color_selections ?? mallBundle?.color_selections ?? {},
       image_urls: designBundle?.image_urls ?? {},

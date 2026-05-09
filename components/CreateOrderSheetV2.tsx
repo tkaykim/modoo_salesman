@@ -2,7 +2,8 @@
 
 // 풀 주문 생성기 — modoo_admin AdminOrderCreator 와 동일 구조
 // 다품목, 새디자인(외부 editor 핸드오프), 기존디자인(saved_designs 검색),
-// 사이즈 매트릭스, 가격 모드(auto/custom_unit_price), 결제 옵션(완료/계좌이체/고객결제링크)
+// 사이즈 매트릭스, 단가는 시스템 자동 산정(designPricePerItem ?? basePrice),
+// 결제 옵션(완료/계좌이체/고객결제링크)
 
 import { useEffect, useMemo, useState } from 'react';
 import { Icon, Card, Section, HairLine, Chip } from '@/components/ui';
@@ -35,8 +36,6 @@ interface OrderItemDraft {
   basePrice: number;
   sizeOptions: ProductSizeOption[];
   variants: OrderVariant[];
-  pricingMode: 'auto' | 'custom_unit_price';
-  customUnitPrice: string;
   designPricePerItem: number | null;
 }
 
@@ -74,10 +73,6 @@ function newUid() {
   return `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function getItemUnit(item: OrderItemDraft): number {
-  if (item.pricingMode === 'custom_unit_price') {
-    const n = parseFloat(item.customUnitPrice);
-    return n > 0 ? n : 0;
-  }
   return item.designPricePerItem ?? item.basePrice;
 }
 function getItemQty(item: OrderItemDraft): number {
@@ -179,8 +174,6 @@ export default function CreateOrderSheetV2({
           sizeOpts.length > 0
             ? sizeOpts.map((s) => ({ sizeLabel: s.label, sizeCode: s.size_code, quantity: 0 }))
             : [{ sizeLabel: 'FREE', sizeCode: 'FREE', quantity: 0 }],
-        pricingMode: 'auto',
-        customUnitPrice: '',
         designPricePerItem: mp.price && mp.price > 0 ? mp.price : null,
       });
     }
@@ -250,8 +243,6 @@ export default function CreateOrderSheetV2({
         variants: sizeOpts.length > 0
           ? sizeOpts.map((s) => ({ sizeLabel: s.label, sizeCode: s.size_code, quantity: 0 }))
           : [{ sizeLabel: 'FREE', sizeCode: 'FREE', quantity: 0 }],
-        pricingMode: 'auto',
-        customUnitPrice: '',
         designPricePerItem: d.price_per_item && d.price_per_item > 0 ? d.price_per_item : null,
       });
     }
@@ -656,32 +647,19 @@ function ItemEditor({
             </div>
           </Section>
 
-          {/* 가격 모드 */}
-          <Section title="단가 모드">
-            <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-              <Chip
-                active={item.pricingMode === 'auto'}
-                onClick={() => onUpdate({ pricingMode: 'auto' })}
-              >
-                자동 ({fmt(item.designPricePerItem ?? item.basePrice)})
-              </Chip>
-              <Chip
-                active={item.pricingMode === 'custom_unit_price'}
-                onClick={() => onUpdate({ pricingMode: 'custom_unit_price' })}
-              >
-                직접 입력
-              </Chip>
+          {/* 단가 (시스템 산정 — 읽기 전용) */}
+          <Section title="개당 단가">
+            <div className="flex items-center justify-between rounded-[8px] border border-[var(--color-hairline)] bg-[var(--color-surface-alt)] px-3 py-2 text-[13px]">
+              <span className="text-[var(--color-ink-muted)]">
+                {item.designPricePerItem != null ? '디자인 단가' : '제품 기본가'}
+              </span>
+              <span className="font-mono font-bold">
+                {fmt(item.designPricePerItem ?? item.basePrice)}
+              </span>
             </div>
-            {item.pricingMode === 'custom_unit_price' && (
-              <input
-                type="number"
-                inputMode="numeric"
-                value={item.customUnitPrice}
-                onChange={(e) => onUpdate({ customUnitPrice: e.target.value })}
-                placeholder="개당 단가 (원)"
-                className="w-full rounded-[8px] border border-[var(--color-hairline)] px-3 py-2 text-[14px] bg-white focus:outline-none focus:border-[var(--color-brand-500)] font-mono"
-              />
-            )}
+            <p className="mt-1 text-[11px] text-[var(--color-ink-muted)]">
+              단가는 시스템에서 자동 산정됩니다. 할인은 쿠폰으로 적용해 주세요.
+            </p>
           </Section>
 
           <button

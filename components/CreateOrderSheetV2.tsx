@@ -4,9 +4,8 @@
 // 다품목, 새디자인(외부 editor 핸드오프), 기존디자인(saved_designs 검색),
 // 사이즈 매트릭스, 가격 모드(auto/custom_unit_price), 결제 옵션(완료/계좌이체/고객결제링크)
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon, Card, Section, HairLine, Chip } from '@/components/ui';
-import { createClient } from '@/lib/supabase-client';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { useProducts, matchProduct, type ProductRow, type ProductSizeOption } from '@/hooks/useProducts';
 import { useMyCoupons } from '@/hooks/useMyCoupons';
@@ -16,9 +15,6 @@ import DesignEditorModal from '@/components/DesignEditorModal';
 import TeamPicker from '@/components/TeamPicker';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
-// production 고정 도메인 (env var 사용 안 함)
-const ADMIN_BASE = 'https://admin.modoogoods.com';
-const APP_BASE = 'https://modoouniform.com';
 
 interface OrderVariant {
   sizeLabel: string;
@@ -76,12 +72,6 @@ interface Props {
 
 function newUid() {
   return `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-function buildOrderId() {
-  const d = new Date();
-  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `SR-${ymd}-${rand}`;
 }
 function getItemUnit(item: OrderItemDraft): number {
   if (item.pricingMode === 'custom_unit_price') {
@@ -298,171 +288,51 @@ export default function CreateOrderSheetV2({
 
     setSubmitting(true);
     try {
-      const supabase = createClient();
-      const orderId = buildOrderId();
-
-      // payment status mapping
-      const paymentStatus =
-        paymentType === 'completed' ? 'paid' :
-        paymentType === 'bank_transfer' ? 'pending' :
-        'pending';
-      const orderStatus =
-        paymentType === 'completed' ? 'payment_completed' : 'payment_pending';
-      const paymentMethod =
-        paymentType === 'bank_transfer' ? 'bank_transfer' :
-        paymentType === 'customer_payment' ? 'toss' :
-        'manual';
-
-      // payment_link_token (customer_payment 일 때만 생성)
-      const paymentLinkToken = paymentType === 'customer_payment'
-        ? Array.from(crypto.getRandomValues(new Uint8Array(16)))
-            .map((b) => b.toString(16).padStart(2, '0')).join('')
-        : null;
-
-      const orderRow = {
-        id: orderId,
-        user_id: user.id,
-        order_status: orderStatus,
-        payment_status: paymentStatus,
-        payment_method: paymentMethod,
-        total_amount: totalAmount,
-        original_amount: orderSubtotal,
-        delivery_fee: deliveryFee,
-        coupon_discount: 0, // 일반 쿠폰 자리는 비움 (영업사원 쿠폰만 적용)
-        salesman_coupon_id: applyMyCoupon && primaryCoupon ? primaryCoupon.id : null,
-        salesman_discount_amount: couponDiscount,
-        admin_discount: adminDiscountNum,
-        admin_surcharge: adminSurchargeNum,
-        customer_name: customerName.trim() || null,
-        customer_phone: customerPhone.trim() || null,
-        customer_email: customerEmail.trim() || null,
-        shipping_method: shippingMethod,
-        partner_mall_id: partnerMallId,
-        salesman_id: user.salesman_profile_id,
-        payment_link_token: paymentLinkToken,
-        customer_note: customerNote.trim() || null,
-        order_category: 'salesman_direct',
+      // 모든 가격 검증·INSERT는 서버(/api/salesman/orders)에서 처리.
+      // 클라는 의도(items + 메타)만 보낸다.
+      const payload = {
+        customerName: customerName.trim() || null,
+        customerPhone: customerPhone.trim() || null,
+        customerEmail: customerEmail.trim() || null,
+        customerNote: customerNote.trim() || null,
+        partnerMallId,
+        shippingMethod,
+        paymentType,
+        applyMyCoupon: applyMyCoupon && !!primaryCoupon,
+        couponId: applyMyCoupon && primaryCoupon ? primaryCoupon.id : null,
+        couponDiscount,
+        adminDiscount: adminDiscountNum,
+        adminSurcharge: adminSurchargeNum,
+        items: items.map((it) => ({
+          productId: it.productId,
+          productTitle: it.productTitle,
+          designId: it.designId,
+          designTitle: it.designTitle,
+          designPreviewUrl: it.designPreviewUrl,
+          productThumbnail: it.productThumbnail,
+          partnerMallProductId: it.partnerMallProductId,
+          variants: it.variants.filter((v) => v.quantity > 0),
+          pricePerItem: getItemUnit(it),
+        })),
+        // 영업사원이 만든 주문은 기본적으로 고객이 직접 주소/수량을 채워야 하는 케이스가
+        // 많으므로 customer_payment 흐름에서 customer/shipping을 기본 허용한다.
+        customerEditableFields: paymentType === 'customer_payment'
+          ? { customerInfo: true, shipping: true }
+          : null,
       };
 
-      const { error: orderErr } = await supabase.from('orders').insert(orderRow);
-      if (orderErr) throw new Error(`주문 등록 실패: ${orderErr.message}`);
-
-      // 디자인/진열 풀 데이터 fetch — modoo_admin/modoo_app과 동일한 방식으로 order_items에 보존
-      // (canvas_state, color_selections, image_urls, text_svg_exports, custom_fonts, retouch_requested)
-      type DesignBundle = {
-        canvas_state: Record<string, unknown>;
-        color_selections: Record<string, unknown>;
-        image_urls: Record<string, unknown>;
-        text_svg_exports: Record<string, unknown> | null;
-        custom_fonts: unknown[];
-        retouch_requested: boolean;
-        preview_url: string | null;
-        title: string | null;
-      };
-      const designsMap = new Map<string, DesignBundle>();
-      const mallProductsMap = new Map<string, DesignBundle>();
-
-      const designIds = Array.from(
-        new Set(items.map((it) => it.designId).filter((v): v is string => !!v)),
-      );
-      const mallProductIds = Array.from(
-        new Set(
-          items.map((it) => it.partnerMallProductId).filter((v): v is string => !!v),
-        ),
-      );
-
-      if (designIds.length > 0) {
-        const { data: designs } = await supabase
-          .from('saved_designs')
-          .select(
-            'id, title, color_selections, canvas_state, preview_url, image_urls, text_svg_exports, custom_fonts, retouch_requested',
-          )
-          .in('id', designIds);
-        for (const d of designs ?? []) {
-          designsMap.set(d.id, {
-            canvas_state: (d.canvas_state as Record<string, unknown>) ?? {},
-            color_selections: (d.color_selections as Record<string, unknown>) ?? {},
-            image_urls: (d.image_urls as Record<string, unknown>) ?? {},
-            text_svg_exports:
-              (d.text_svg_exports as Record<string, unknown> | null) ?? null,
-            custom_fonts: (d.custom_fonts as unknown[]) ?? [],
-            retouch_requested: (d.retouch_requested as boolean) ?? false,
-            preview_url: (d.preview_url as string | null) ?? null,
-            title: (d.title as string | null) ?? null,
-          });
-        }
-      }
-      if (mallProductIds.length > 0) {
-        const { data: mallProducts } = await supabase
-          .from('partner_mall_products')
-          .select(
-            'id, display_name, color_hex, color_name, color_code, canvas_state, preview_url',
-          )
-          .in('id', mallProductIds);
-        for (const m of mallProducts ?? []) {
-          mallProductsMap.set(m.id, {
-            canvas_state: (m.canvas_state as Record<string, unknown>) ?? {},
-            color_selections: {
-              productColor: (m.color_hex as string | null) ?? null,
-              colorName: (m.color_name as string | null) ?? null,
-              colorCode: (m.color_code as string | null) ?? null,
-            },
-            image_urls: {},
-            text_svg_exports: null,
-            custom_fonts: [],
-            retouch_requested: false,
-            preview_url: (m.preview_url as string | null) ?? null,
-            title: (m.display_name as string | null) ?? null,
-          });
-        }
-      }
-
-      const itemRows = items.map((it) => {
-        const qty = getItemQty(it);
-        const unit = getItemUnit(it);
-        const variants = it.variants
-          .filter((v) => v.quantity > 0)
-          .map((v) => ({ size_id: v.sizeCode, size_name: v.sizeLabel, quantity: v.quantity }));
-        const bundle: DesignBundle | null =
-          (it.designId ? designsMap.get(it.designId) : null) ??
-          (it.partnerMallProductId ? mallProductsMap.get(it.partnerMallProductId) : null) ??
-          null;
-        return {
-          order_id: orderId,
-          product_id: it.productId,
-          product_title: it.productTitle,
-          design_id: it.designId,
-          design_title: it.designTitle ?? bundle?.title ?? null,
-          quantity: qty,
-          price_per_item: unit,
-          // modoo_admin/modoo_app order_items와 동일한 디자인 데이터 보존
-          canvas_state: bundle?.canvas_state ?? {},
-          color_selections: bundle?.color_selections ?? {},
-          image_urls: bundle?.image_urls ?? {},
-          text_svg_exports: bundle?.text_svg_exports ?? undefined,
-          custom_fonts: bundle?.custom_fonts ?? [],
-          retouch_requested: bundle?.retouch_requested ?? false,
-          item_options: {
-            variants,
-            source: 'salesman_app_v2',
-            // 진열 기반은 partner_mall_product.id를 보존 (사후 조회용)
-            partner_mall_product_id: it.partnerMallProductId,
-          },
-          thumbnail_url:
-            it.designPreviewUrl ?? bundle?.preview_url ?? it.productThumbnail,
-          purchase_order_status: 'pending',
-          // designId가 없어도 designTitle/진열 있으면 디자인 있는 것으로 간주
-          design_status: it.designId || it.designTitle ? 'pending' : 'design_required',
-        };
+      const res = await fetch('/api/salesman/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-
-      const { error: itemsErr } = await supabase.from('order_items').insert(itemRows);
-      if (itemsErr) {
-        await supabase.from('orders').delete().eq('id', orderId);
-        throw new Error(`품목 등록 실패: ${itemsErr.message}`);
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || `주문 등록 실패 (HTTP ${res.status})`);
       }
 
-      const linkUrl = paymentLinkToken ? `${APP_BASE}/order/custom/${paymentLinkToken}` : null;
+      const orderId: string = json?.data?.orderId;
+      const linkUrl: string | null = json?.data?.paymentLinkUrl ?? null;
       onCreated(orderId, linkUrl);
       onClose();
     } catch (e) {

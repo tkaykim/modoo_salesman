@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { useTeam } from '@/hooks/useTeam';
 import { useTeamOrders, type TeamOrderRow } from '@/hooks/useTeamOrders';
@@ -987,11 +987,88 @@ function ShareLinkTab({ team }: { team: Team }) {
   const [shareError, setShareError] = useState<string | null>(null);
   // 고객용 modoo_app 도메인 (production 고정)
   const customerAppBase = 'https://modoouniform.com';
-  const slug = team.slug || team.shareToken;
-  const link = slug ? `${customerAppBase}/mall/${slug}` : null;
+
+  // 사용자 지정 slug 우선, 없으면 share_token fallback. team prop은 mutate 안 되므로
+  // 편집 후엔 currentSlug 로컬 상태를 사용한다.
+  const [currentSlug, setCurrentSlug] = useState<string | null>(team.slug ?? null);
+  useEffect(() => {
+    setCurrentSlug(team.slug ?? null);
+  }, [team.slug]);
+
+  const effectiveSlug = currentSlug || team.shareToken;
+  const link = effectiveSlug ? `${customerAppBase}/mall/${effectiveSlug}` : null;
   const qrSrc = link
     ? `https://quickchart.io/qr?size=240&margin=2&text=${encodeURIComponent(link)}`
     : null;
+
+  // ── 슬러그 편집 상태 ──
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugDraft, setSlugDraft] = useState('');
+  const [slugCheck, setSlugCheck] = useState<
+    | { state: 'idle' }
+    | { state: 'checking' }
+    | { state: 'ok'; normalized: string }
+    | { state: 'invalid' }
+    | { state: 'taken' }
+  >({ state: 'idle' });
+  const [slugSaving, setSlugSaving] = useState(false);
+  const [slugError, setSlugError] = useState<string | null>(null);
+
+  // 디바운스 가용성 체크
+  useEffect(() => {
+    if (!editingSlug) return;
+    if (!slugDraft.trim()) {
+      setSlugCheck({ state: 'idle' });
+      return;
+    }
+    setSlugCheck({ state: 'checking' });
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/salesman/teams/${team.id}/slug?candidate=${encodeURIComponent(slugDraft)}`,
+        );
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.data) {
+          setSlugCheck({ state: 'invalid' });
+          return;
+        }
+        if (json.data.available) {
+          setSlugCheck({ state: 'ok', normalized: json.data.normalized });
+        } else if (json.data.reason === 'TAKEN') {
+          setSlugCheck({ state: 'taken' });
+        } else {
+          setSlugCheck({ state: 'invalid' });
+        }
+      } catch {
+        setSlugCheck({ state: 'invalid' });
+      }
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [slugDraft, editingSlug, team.id]);
+
+  const saveSlug = async (next: string | null) => {
+    setSlugError(null);
+    setSlugSaving(true);
+    try {
+      const res = await fetch(`/api/salesman/teams/${team.id}/slug`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: next }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || '저장 실패');
+      }
+      setCurrentSlug(json?.data?.slug ?? null);
+      setEditingSlug(false);
+      setSlugDraft('');
+      setSlugCheck({ state: 'idle' });
+    } catch (err) {
+      setSlugError((err as Error).message);
+    } finally {
+      setSlugSaving(false);
+    }
+  };
 
   const copyLink = async () => {
     if (!link) return;
@@ -1081,6 +1158,127 @@ function ShareLinkTab({ team }: { team: Team }) {
           <Card padding="md">
             <p className="text-[10px] text-[var(--color-muted)] mb-1">공유 URL</p>
             <p className="text-[12px] font-mono text-[var(--color-ink)] break-all leading-relaxed">{link}</p>
+          </Card>
+
+          {/* 슬러그(짧은 URL) 편집기 */}
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-[12px] font-bold text-[var(--color-ink)]">짧은 URL (슬러그)</p>
+                <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                  영업/홍보용 외우기 쉬운 주소를 직접 정할 수 있어요.
+                </p>
+              </div>
+              {!editingSlug && (
+                <button
+                  type="button"
+                  className="text-[11px] font-bold text-[var(--color-brand-500)]"
+                  onClick={() => {
+                    setEditingSlug(true);
+                    setSlugDraft(currentSlug ?? '');
+                    setSlugError(null);
+                    setSlugCheck({ state: 'idle' });
+                  }}
+                >
+                  {currentSlug ? '변경' : '설정'}
+                </button>
+              )}
+            </div>
+
+            {!editingSlug ? (
+              currentSlug ? (
+                <p className="text-[12px] font-mono text-[var(--color-ink)] break-all">
+                  {customerAppBase}/mall/<span className="font-bold">{currentSlug}</span>
+                </p>
+              ) : (
+                <p className="text-[11px] text-[var(--color-faint)]">
+                  아직 슬러그가 설정되지 않았어요. 위 공유 URL은 자동 생성된 토큰을 사용합니다.
+                </p>
+              )
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 rounded-[10px] border border-[var(--color-hairline)] px-2 py-1.5 focus-within:border-[var(--color-brand-500)]">
+                  <span className="text-[11px] font-mono text-[var(--color-muted)] whitespace-nowrap">
+                    /mall/
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="text"
+                    value={slugDraft}
+                    onChange={(e) => setSlugDraft(e.target.value)}
+                    placeholder="my-team"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="flex-1 min-w-0 bg-transparent text-[13px] font-mono outline-none"
+                    maxLength={40}
+                  />
+                </div>
+                <div className="text-[10px] leading-relaxed">
+                  {slugCheck.state === 'idle' && (
+                    <span className="text-[var(--color-faint)]">
+                      소문자 영문/숫자/하이픈, 3~40자.
+                    </span>
+                  )}
+                  {slugCheck.state === 'checking' && (
+                    <span className="text-[var(--color-muted)]">확인 중…</span>
+                  )}
+                  {slugCheck.state === 'ok' && (
+                    <span className="text-[var(--color-brand-500)] font-bold">
+                      ✓ 사용 가능: {slugCheck.normalized}
+                    </span>
+                  )}
+                  {slugCheck.state === 'invalid' && (
+                    <span className="text-[var(--color-warn)]">
+                      형식이 올바르지 않거나 예약어입니다.
+                    </span>
+                  )}
+                  {slugCheck.state === 'taken' && (
+                    <span className="text-[var(--color-warn)]">
+                      이미 사용 중인 슬러그입니다.
+                    </span>
+                  )}
+                </div>
+                {slugError && (
+                  <p className="text-[10px] text-[var(--color-warn)]">{slugError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={slugSaving || slugCheck.state !== 'ok'}
+                    onClick={() =>
+                      slugCheck.state === 'ok' && saveSlug(slugCheck.normalized)
+                    }
+                    className="flex-1 rounded-[10px] bg-[var(--color-brand-500)] text-white text-[12px] font-bold py-2 disabled:opacity-50"
+                  >
+                    {slugSaving ? '저장 중…' : '저장'}
+                  </button>
+                  {currentSlug && (
+                    <button
+                      type="button"
+                      disabled={slugSaving}
+                      onClick={() => saveSlug(null)}
+                      className="rounded-[10px] bg-[var(--color-surface-alt)] text-[var(--color-muted)] text-[12px] font-bold px-3 py-2 disabled:opacity-50"
+                    >
+                      슬러그 해제
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={slugSaving}
+                    onClick={() => {
+                      setEditingSlug(false);
+                      setSlugDraft('');
+                      setSlugCheck({ state: 'idle' });
+                      setSlugError(null);
+                    }}
+                    className="rounded-[10px] bg-[var(--color-surface-alt)] text-[var(--color-muted)] text-[12px] font-bold px-3 py-2 disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            )}
           </Card>
 
           <div className="grid grid-cols-2 gap-2">

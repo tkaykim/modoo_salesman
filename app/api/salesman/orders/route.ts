@@ -200,9 +200,11 @@ export async function POST(request: Request) {
 
   // 3) 권위 단가 결정 + subtotal 계산
   // 단가는 클라이언트가 보낸 값을 무시하고 서버가 결정한다:
-  //   - designId 가 있으면 saved_designs.price_per_item
-  //   - 없으면 products.base_price
-  // 둘 다 없으면 거부 (가격 미정 상품/디자인은 주문 불가).
+  //   - designId 가 있고 saved_designs.price_per_item > 0 이면 그 값을 사용
+  //     (DesignEditorModal 은 신규 디자인을 price_per_item: 0 으로 저장하므로
+  //      0/null/음수는 "단가 미설정"으로 간주하고 제품 base_price 로 폴백)
+  //   - 그 외에는 products.base_price
+  //   - 둘 다 유효하지 않으면 거부.
   let subtotal = 0;
   const authoritativePrices: number[] = [];
   for (const it of body.items) {
@@ -212,12 +214,18 @@ export async function POST(request: Request) {
     }
     let authoritativePrice: number | undefined;
     if (it.designId) {
-      authoritativePrice = designPriceMap.get(it.designId);
+      const dp = designPriceMap.get(it.designId);
+      if (typeof dp === 'number' && Number.isFinite(dp) && dp > 0) {
+        authoritativePrice = dp;
+      }
     }
     if (authoritativePrice == null) {
-      authoritativePrice = basePriceMap.get(it.productId);
+      const bp = basePriceMap.get(it.productId);
+      if (typeof bp === 'number' && Number.isFinite(bp) && bp >= 0) {
+        authoritativePrice = bp;
+      }
     }
-    if (typeof authoritativePrice !== 'number' || !Number.isFinite(authoritativePrice) || authoritativePrice < 0) {
+    if (typeof authoritativePrice !== 'number') {
       return NextResponse.json(
         { error: '제품 또는 디자인 단가를 확인할 수 없습니다.' },
         { status: 400 },

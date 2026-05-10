@@ -12,7 +12,9 @@ export interface SalesmanData {
   // 'salesman'은 앱 컨텍스트 표시용. profiles.role 값과 별개.
   // (사용자는 admin/customer/factory 역할이면서 동시에 영업사원일 수 있음)
   role: 'salesman';
-  grade?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+  grade?:
+    | 'LV0' | 'LV1' | 'LV2' | 'LV3' | 'LV4' | 'LV5'
+    | 'LV6' | 'LV7' | 'LV8' | 'LV9' | 'LV10';
   salesman_code?: string;
   // salesman_profiles.id — partner_malls.salesman_id 등 FK 사용
   salesman_profile_id?: string;

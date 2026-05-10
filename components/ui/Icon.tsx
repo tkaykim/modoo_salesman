@@ -64,7 +64,13 @@ export type IconName =
   | 'history'
   | 'logout'
   | 'info'
-  | 'alert';
+  | 'alert'
+  | 'bolt'
+  | 'map'
+  | 'target'
+  | 'clock'
+  | 'arrow-up'
+  | 'trophy';
 
 export interface IconProps {
   name: IconName;
@@ -519,6 +525,47 @@ export function Icon({
         <svg {...p}>
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v6M12 16v.01" />
+        </svg>
+      );
+    case 'bolt':
+      return (
+        <svg {...p}>
+          <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />
+        </svg>
+      );
+    case 'map':
+      return (
+        <svg {...p}>
+          <path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2z" />
+          <path d="M9 3v16M15 5v16" />
+        </svg>
+      );
+    case 'target':
+      return (
+        <svg {...p}>
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="12" cy="12" r="1.5" fill={color} stroke="none" />
+        </svg>
+      );
+    case 'clock':
+      return (
+        <svg {...p}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+    case 'arrow-up':
+      return (
+        <svg {...p}>
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      );
+    case 'trophy':
+      return (
+        <svg {...p}>
+          <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" />
+          <path d="M5 4H3v3a3 3 0 0 0 3 3M19 4h2v3a3 3 0 0 1-3 3" />
         </svg>
       );
     default:

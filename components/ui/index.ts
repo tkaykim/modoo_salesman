@@ -4,3 +4,7 @@ export { CTA, type CTAProps } from './CTA';
 export { Chip, type ChipProps } from './Chip';
 export { Card, Section, HairLine, type CardProps } from './Card';
 export { TabBar, NavSpacer, type TabBarProps, type TabItem } from './TabBar';
+export { TintedSection, type SectionTint } from './TintedSection';
+export { HeroLevelCard, type HeroLevelCardProps } from './HeroLevelCard';
+export { EarningsCard, type EarningsCardProps } from './EarningsCard';
+export { QuickActionGrid, type QuickActionItem, type QuickActionTint } from './QuickActionGrid';

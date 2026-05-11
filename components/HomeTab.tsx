@@ -216,10 +216,11 @@ interface MockMission {
   xp: number;
 }
 
+// 추천 미션 — 데모용. 실제 단체 이름은 데이터 연결 후 채워집니다.
 const MOCK_MISSIONS: MockMission[] = [
-  { id: 'm1', name: '서울중학교 축구부', stage: 'contact', distance: '0.3km',  mission: '담당자 명함 받기',     xp: 30 },
-  { id: 'm2', name: '강남헬스장',        stage: 'lead',    distance: '0.8km',  mission: '단가표 제시',          xp: 20 },
-  { id: 'm3', name: '청담 동호회',       stage: 'quote',   distance: '1.2km',  mission: '견적서 회신 받기',     xp: 50 },
+  { id: 'm1', name: '샘플 단체 A', stage: 'contact', distance: '0.3km',  mission: '담당자 명함 받기',     xp: 30 },
+  { id: 'm2', name: '샘플 단체 B', stage: 'lead',    distance: '0.8km',  mission: '단가표 제시',          xp: 20 },
+  { id: 'm3', name: '샘플 단체 C', stage: 'quote',   distance: '1.2km',  mission: '견적서 회신 받기',     xp: 50 },
 ];
 
 function MissionRow({ mission, divider, onClick }: { mission: MockMission; divider: boolean; onClick: () => void }) {
@@ -255,9 +256,10 @@ function MissionRow({ mission, divider, onClick }: { mission: MockMission; divid
   );
 }
 
+// 최근 활동 — 데모용. 실제 단체 활동은 데이터 연결 후 채워집니다.
 const MOCK_FEED = [
-  { id: 'f1', kind: 'reorder' as const, text: '서울중학교 축구부 재주문 임박',  time: '오늘',         urgent: true },
-  { id: 'f2', kind: 'mission' as const, text: '강남헬스장 명함 미션 완료',       time: '어제',         urgent: false },
-  { id: 'f3', kind: 'coupon'  as const, text: '5% 쿠폰 1장 지급',                time: '5월 7일',      urgent: false },
-  { id: 'f4', kind: 'success' as const, text: '청담 동호회 첫 주문 32벌 등록',  time: '5월 5일',      urgent: false },
+  { id: 'f1', kind: 'reorder' as const, text: '재주문 임박 단체 1건',     time: '오늘',         urgent: true },
+  { id: 'f2', kind: 'mission' as const, text: '명함 받기 미션 완료',       time: '어제',         urgent: false },
+  { id: 'f3', kind: 'coupon'  as const, text: '5% 쿠폰 1장 지급',          time: '5월 7일',      urgent: false },
+  { id: 'f4', kind: 'success' as const, text: '신규 단체 첫 주문 등록',    time: '5월 5일',      urgent: false },
 ];

@@ -12,12 +12,13 @@ interface Pin {
   distance: string;
 }
 
+// 지도 핀 — 데모용. 실제 단체 위치는 데이터 연결 후 채워집니다.
 const PINS: Pin[] = [
-  { id: 'p1', x: 30,  y: 40, stage: 'contact', name: '서울중학교 축구부', distance: '0.3km' },
-  { id: 'p2', x: 60,  y: 30, stage: 'lead',    name: '강남헬스장',        distance: '0.8km' },
-  { id: 'p3', x: 70,  y: 60, stage: 'quote',   name: '청담 동호회',       distance: '1.2km' },
-  { id: 'p4', x: 40,  y: 70, stage: 'first',   name: '테헤란 IT동아리',   distance: '0.5km' },
-  { id: 'p5', x: 80,  y: 45, stage: 'lead',    name: '학동 헬스',         distance: '1.5km' },
+  { id: 'p1', x: 30,  y: 40, stage: 'contact', name: '샘플 단체 1', distance: '0.3km' },
+  { id: 'p2', x: 60,  y: 30, stage: 'lead',    name: '샘플 단체 2', distance: '0.8km' },
+  { id: 'p3', x: 70,  y: 60, stage: 'quote',   name: '샘플 단체 3', distance: '1.2km' },
+  { id: 'p4', x: 40,  y: 70, stage: 'first',   name: '샘플 단체 4', distance: '0.5km' },
+  { id: 'p5', x: 80,  y: 45, stage: 'lead',    name: '샘플 단체 5', distance: '1.5km' },
 ];
 
 const STAGE_COLOR: Record<Pin['stage'], string> = {

@@ -6,6 +6,7 @@ import { useTeam } from '@/hooks/useTeam';
 import { useTeamOrders, type TeamOrderRow } from '@/hooks/useTeamOrders';
 import { useTeamAssets, type TeamAssetRow, type AssetType } from '@/hooks/useTeamAssets';
 import { useTeamProducts, type TeamProductRow } from '@/hooks/useTeamProducts';
+import AddTeamProductFlow from '@/components/AddTeamProductFlow';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { CATEGORY_COLORS, formatAddress, type Team } from '@/lib/teams';
 import { Icon, Card, Section, HairLine, CTA, Chip } from '@/components/ui';
@@ -32,7 +33,8 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
   const { team, isLoading, mutate: refetchTeam } = useTeam(open ? teamId : null);
   const { orders, totalRevenue, isLoading: ordersLoading } = useTeamOrders(open ? teamId : null);
   const { assets, logos, images, documents, isLoading: assetsLoading, mutate: refetchAssets } = useTeamAssets(open ? teamId : null);
-  const { products, isLoading: productsLoading } = useTeamProducts(open ? teamId : null);
+  const { products, isLoading: productsLoading, mutate: refetchProducts } = useTeamProducts(open ? teamId : null);
+  const [addProductOpen, setAddProductOpen] = useState(false);
 
   if (!open || !teamId) return null;
 
@@ -92,14 +94,14 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
                   documentCount={documents.length}
                   products={products}
                   productsLoading={productsLoading}
-                  onAddProduct={() => onCreateOrder(team.id)}
+                  onAddProduct={() => setAddProductOpen(true)}
                 />
               )}
               {tab === 'products' && (
                 <ProductsTab
                   products={products}
                   loading={productsLoading}
-                  onAdd={() => onCreateOrder(team.id)}
+                  onAdd={() => setAddProductOpen(true)}
                   onOrderSingle={(p) => onCreateOrder(team.id, [p])}
                   onOrderMulti={(picked) => onCreateOrder(team.id, picked)}
                 />
@@ -142,6 +144,16 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
         )}
       </div>
 
+      <AddTeamProductFlow
+        open={addProductOpen}
+        teamId={teamId}
+        mallName={team?.name ?? null}
+        onClose={() => setAddProductOpen(false)}
+        onCreated={async () => {
+          await refetchProducts();
+          await refetchTeam();
+        }}
+      />
     </div>
   );
 }

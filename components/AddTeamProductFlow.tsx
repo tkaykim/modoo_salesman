@@ -4,20 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts';
+import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
 import DesignEditorModal from '@/components/DesignEditorModal';
-import { Card, CTA, Icon } from '@/components/ui';
-import type { SavedDesignRow } from '@/hooks/useSavedDesigns';
-
-interface ColorRow {
-  id: string;
-  manufacturer_color_id: string | null;
-  manufacturer_colors: {
-    id: string;
-    name: string | null;
-    hex: string | null;
-    color_code: string | null;
-  } | null;
-}
+import { Card, Icon } from '@/components/ui';
 
 interface Props {
   open: boolean;
@@ -28,7 +17,7 @@ interface Props {
   onCreated?: () => void;
 }
 
-type Step = 'product' | 'color' | 'design';
+type Step = 'choice' | 'product-pick' | 'design-pick';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -39,18 +28,14 @@ export default function AddTeamProductFlow({
   onClose,
   onCreated,
 }: Props) {
-  const [step, setStep] = useState<Step>('product');
-  const [search, setSearch] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<ProductRow | null>(null);
-
-  const [colors, setColors] = useState<ColorRow[]>([]);
-  const [colorsLoading, setColorsLoading] = useState(false);
-  const [selectedColor, setSelectedColor] = useState<ColorRow | null>(null);
+  const [step, setStep] = useState<Step>('choice');
+  const [productSearch, setProductSearch] = useState('');
+  const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 디자인 제목 입력 모달 — Promise resolver로 onBeforeSave와 연결
+  // 새 디자인 저장 직전 제목 입력 모달
   type TitlePrompt = {
     defaultValue: string;
     resolve: (value: string | null) => void;
@@ -61,17 +46,15 @@ export default function AddTeamProductFlow({
 
   const { products, isLoading: productsLoading } = useProducts();
 
-  const filtered = useMemo(
-    () => products.filter((p) => matchProduct(p, search)),
-    [products, search],
+  const filteredProducts = useMemo(
+    () => products.filter((p) => matchProduct(p, productSearch)),
+    [products, productSearch],
   );
 
   const reset = () => {
-    setStep('product');
-    setSearch('');
-    setSelectedProduct(null);
-    setColors([]);
-    setSelectedColor(null);
+    setStep('choice');
+    setProductSearch('');
+    setEditingProduct(null);
     setSubmitting(false);
     setError(null);
     setTitlePrompt(null);
@@ -83,44 +66,16 @@ export default function AddTeamProductFlow({
     if (!open) reset();
   }, [open]);
 
-  // 제품 선택 → 색상 fetch
-  const pickProduct = async (p: ProductRow) => {
-    setSelectedProduct(p);
-    setStep('color');
-    setColorsLoading(true);
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('product_colors')
-        .select('id, manufacturer_color_id, manufacturer_colors(id, name, hex, color_code)')
-        .eq('product_id', p.id)
-        .eq('is_active', true)
-        .order('sort_order');
-      const rows = (data ?? []) as unknown as ColorRow[];
-      setColors(rows);
-      if (rows.length > 0) setSelectedColor(rows[0]);
-    } catch {
-      setColors([]);
-    } finally {
-      setColorsLoading(false);
-    }
-  };
-
-  const goDesign = () => {
-    if (!selectedProduct) return;
-    setStep('design');
-  };
-
-  const buildDefaultTitle = () => {
+  const buildDefaultTitle = (product: ProductRow | null) => {
     const mall = (mallName ?? '').trim();
-    const product = (selectedProduct?.title ?? '').trim();
-    return [mall, product].filter(Boolean).join(' ');
+    const productTitle = (product?.title ?? '').trim();
+    return [mall, productTitle].filter(Boolean).join(' ');
   };
 
-  // DesignEditorModal에서 저장 직전에 호출. 제목 입력 모달을 띄우고 사용자 응답까지 대기.
+  // DesignEditorModal에서 저장 직전에 호출 — 제목 모달 띄우고 응답 대기
   const promptForTitle = (): Promise<{ title: string } | null> => {
     return new Promise((resolve) => {
-      const defaultValue = buildDefaultTitle();
+      const defaultValue = buildDefaultTitle(editingProduct);
       setTitleInput(defaultValue);
       setTitlePrompt({
         defaultValue,
@@ -131,7 +86,7 @@ export default function AddTeamProductFlow({
 
   const confirmTitle = () => {
     const trimmed = titleInput.trim();
-    if (!trimmed) return; // 빈 제목은 거부
+    if (!trimmed) return;
     setTitleSavedName(trimmed);
     titlePrompt?.resolve(trimmed);
     setTitlePrompt(null);
@@ -142,42 +97,90 @@ export default function AddTeamProductFlow({
     setTitlePrompt(null);
   };
 
-  const handleSavedDesign = async (design: SavedDesignRow, meta?: { title: string }) => {
-    if (!teamId || !selectedProduct) return;
+  // 단체 mall에 제품 한 건 등록 (색상 필드 없음 — 모두 null)
+  const placeOne = async (params: {
+    productId: string;
+    displayName: string;
+    canvasState: Record<string, unknown>;
+    previewUrl: string | null;
+  }) => {
+    if (!teamId) throw new Error('teamId 누락');
+    const res = await fetch('/api/team-products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        team_id: teamId,
+        product_id: params.productId,
+        display_name: params.displayName,
+        manufacturer_color_id: null,
+        color_hex: null,
+        color_name: null,
+        color_code: null,
+        logo_placements: {},
+        canvas_state: params.canvasState,
+        preview_url: params.previewUrl,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      const detail = [j?.error, j?.code, j?.details, j?.hint].filter(Boolean).join(' | ');
+      throw new Error(detail || `저장 실패 (${res.status})`);
+    }
+  };
+
+  // 새 디자인: 에디터 저장 완료 후 단체 mall에 배치
+  const handleNewDesignSaved = async (design: SavedDesignRow, meta?: { title: string }) => {
+    if (!editingProduct) return;
     setSubmitting(true);
     setError(null);
     try {
       const supabase = createClient();
       const { data: full, error: fetchError } = await supabase
         .from('saved_designs')
-        .select('canvas_state, preview_url, color_selections')
+        .select('canvas_state, preview_url')
         .eq('id', design.id)
         .maybeSingle();
       if (fetchError) throw fetchError;
 
-      const mc = selectedColor?.manufacturer_colors ?? null;
-      const finalTitle = meta?.title ?? titleSavedName ?? buildDefaultTitle() ?? selectedProduct.title;
-      const res = await fetch('/api/team-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          team_id: teamId,
-          product_id: selectedProduct.id,
-          display_name: finalTitle,
-          manufacturer_color_id: selectedColor?.manufacturer_color_id ?? null,
-          color_hex: mc?.hex ?? null,
-          color_name: mc?.name ?? null,
-          color_code: mc?.color_code ?? null,
-          logo_placements: {},
-          canvas_state: full?.canvas_state ?? {},
-          preview_url: full?.preview_url ?? design.preview_url ?? null,
-        }),
+      const finalTitle =
+        meta?.title ?? titleSavedName ?? buildDefaultTitle(editingProduct) ?? editingProduct.title;
+
+      await placeOne({
+        productId: editingProduct.id,
+        displayName: finalTitle,
+        canvasState: (full?.canvas_state as Record<string, unknown> | null) ?? {},
+        previewUrl: full?.preview_url ?? design.preview_url ?? null,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        console.error('[AddTeamProductFlow] /api/team-products failed:', j);
-        const detail = [j?.error, j?.code, j?.details, j?.hint].filter(Boolean).join(' | ');
-        throw new Error(detail || `저장 실패 (${res.status})`);
+
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '저장 실패');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 기존 디자인: 선택한 saved_design들을 단체 mall에 일괄 배치
+  const handleExistingDesignsPicked = async (designs: SavedDesignRow[]) => {
+    const targets = designs.filter((d) => d.product_id);
+    if (targets.length === 0) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      for (const d of targets) {
+        const { data: full } = await supabase
+          .from('saved_designs')
+          .select('canvas_state, preview_url')
+          .eq('id', d.id)
+          .maybeSingle();
+        await placeOne({
+          productId: d.product_id!,
+          displayName: d.title ?? buildDefaultTitle(null) ?? '디자인',
+          canvasState: (full?.canvas_state as Record<string, unknown> | null) ?? {},
+          previewUrl: full?.preview_url ?? d.preview_url ?? null,
+        });
       }
       onCreated?.();
       onClose();
@@ -190,19 +193,17 @@ export default function AddTeamProductFlow({
 
   if (!open || !teamId) return null;
 
-  // 디자인 에디터 모달은 자체 풀스크린 — 여기서는 그대로 전달
-  if (step === 'design' && selectedProduct) {
+  // 새 디자인 — 인앱 에디터 풀스크린
+  if (editingProduct) {
     return (
       <>
         <DesignEditorModal
-          productId={selectedProduct.id}
-          initialColor={selectedColor?.manufacturer_colors?.hex ?? undefined}
-          onClose={() => setStep('color')}
-          onSaveComplete={handleSavedDesign}
+          productId={editingProduct.id}
+          onClose={() => setEditingProduct(null)}
+          onSaveComplete={handleNewDesignSaved}
           onBeforeSave={promptForTitle}
         />
 
-        {/* 제목 입력 모달 — DesignEditorModal 위에 띄움 (z-index 더 높게) */}
         {titlePrompt && (
           <div className="fixed inset-0 z-[9500] flex items-center justify-center bg-black/50 px-5">
             <div className="w-full max-w-sm rounded-[18px] bg-white p-5 shadow-2xl">
@@ -258,18 +259,17 @@ export default function AddTeamProductFlow({
     );
   }
 
-  // product/color 단계 — 바텀 시트
   return (
     <div className="fixed inset-0 z-[8500] flex flex-col bg-black/40">
       <div
-        className="relative mt-auto bg-[var(--color-surface)] rounded-t-[20px] shadow-2xl h-[88vh] flex flex-col"
+        className="relative mt-auto bg-[var(--color-surface)] rounded-t-[20px] shadow-2xl h-[92vh] flex flex-col"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Header */}
         <header className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--color-hairline-soft)]">
-          {step === 'color' ? (
+          {step !== 'choice' ? (
             <button
-              onClick={() => setStep('product')}
+              onClick={() => setStep('choice')}
               className="p-2 -ml-1 text-[var(--color-muted)]"
               aria-label="뒤로"
             >
@@ -279,7 +279,9 @@ export default function AddTeamProductFlow({
             <span className="w-10" />
           )}
           <h2 className="text-[15px] font-bold text-[var(--color-ink)] flex-1 text-center truncate px-2">
-            {step === 'product' ? '제품 선택' : '색상 선택'}
+            {step === 'choice' && '제품 추가'}
+            {step === 'product-pick' && '새 디자인 — 제품 선택'}
+            {step === 'design-pick' && '기존 디자인 가져오기'}
           </h2>
           <button
             onClick={onClose}
@@ -292,141 +294,314 @@ export default function AddTeamProductFlow({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {step === 'product' ? (
-            <div className="p-3">
-              <div className="mb-3">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="제품명·코드·제조사 검색"
-                  className="w-full rounded-[12px] bg-[var(--color-surface-alt)] px-3 py-2.5 text-[13px] text-[var(--color-ink)] placeholder:text-[var(--color-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
+          {step === 'choice' && (
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <ActionTile
+                  icon="palette"
+                  label="새 디자인"
+                  desc="에디터로 작업"
+                  onClick={() => {
+                    setProductSearch('');
+                    setStep('product-pick');
+                  }}
+                />
+                <ActionTile
+                  icon="image"
+                  label="기존 디자인"
+                  desc="저장된 작업 검색"
+                  onClick={() => setStep('design-pick')}
                 />
               </div>
-              {productsLoading ? (
-                <div className="py-10 text-center text-[12px] text-[var(--color-muted)]">
-                  불러오는 중...
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="py-10 text-center text-[12px] text-[var(--color-muted)]">
-                  검색 결과가 없습니다.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2.5">
-                  {filtered.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => pickProduct(p)}
-                      className="text-left rounded-[14px] bg-[var(--color-surface)] ring-1 ring-[var(--color-hairline-soft)] overflow-hidden active:scale-[0.99]"
-                    >
-                      <div className="aspect-square bg-[var(--color-surface-alt)]">
-                        {p.thumbnail_image_link?.[0] ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={p.thumbnail_image_link[0]}
-                            alt={p.title}
-                            className="w-full h-full object-contain p-2"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Icon name="image" size={24} color="var(--color-faint)" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-2.5 py-2">
-                        <p className="text-[12px] font-bold text-[var(--color-ink)] line-clamp-2 leading-tight">
-                          {p.title}
-                        </p>
-                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5 num">
-                          {fmt(p.base_price)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <Card padding="lg">
+                <p className="text-[12px] text-[var(--color-muted)] leading-relaxed text-center">
+                  새 디자인을 만들거나 기존 디자인을 선택해 단체 mall에 제품을 배치하세요.
+                  바로 주문으로 이어지지 않습니다.
+                </p>
+              </Card>
             </div>
-          ) : (
-            <div className="p-4 space-y-4">
-              {selectedProduct && (
-                <Card padding="md">
-                  <div className="flex items-center gap-3">
-                    {selectedProduct.thumbnail_image_link?.[0] && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={selectedProduct.thumbnail_image_link[0]}
-                        alt={selectedProduct.title}
-                        className="w-14 h-14 rounded-[10px] object-contain bg-[var(--color-surface-alt)]"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-[var(--color-ink)] truncate">
-                        {selectedProduct.title}
-                      </p>
-                      <p className="text-[11px] text-[var(--color-muted)] num">
-                        {fmt(selectedProduct.base_price)}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              )}
+          )}
 
-              {colorsLoading ? (
-                <div className="py-10 text-center text-[12px] text-[var(--color-muted)]">
-                  색상 불러오는 중...
-                </div>
-              ) : colors.length === 0 ? (
-                <Card padding="md" variant="flat">
-                  <p className="text-[12px] text-[var(--color-muted)] text-center">
-                    이 제품에는 색상 옵션이 없어요. 그대로 디자인을 시작해 주세요.
-                  </p>
-                </Card>
-              ) : (
-                <div className="grid grid-cols-5 gap-3">
-                  {colors.map((c) => {
-                    const hex = c.manufacturer_colors?.hex ?? '#FFFFFF';
-                    const isSelected = selectedColor?.id === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => setSelectedColor(c)}
-                        className="flex flex-col items-center gap-1"
-                        title={c.manufacturer_colors?.name ?? ''}
-                      >
-                        <div
-                          className={`w-11 h-11 rounded-full transition-all ${
-                            isSelected
-                              ? 'ring-2 ring-[var(--color-ink)] scale-110 shadow-md'
-                              : 'ring-1 ring-[var(--color-hairline)] hover:ring-[var(--color-muted)]'
-                          }`}
-                          style={{ backgroundColor: hex }}
-                        />
-                        <span className={`text-[10px] leading-tight text-center truncate w-12 ${
-                          isSelected ? 'font-bold text-[var(--color-ink)]' : 'text-[var(--color-muted)]'
-                        }`}>
-                          {c.manufacturer_colors?.name ?? ''}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+          {step === 'product-pick' && (
+            <ProductPicker
+              products={filteredProducts}
+              search={productSearch}
+              onSearchChange={setProductSearch}
+              onPick={(p) => setEditingProduct(p)}
+              isLoading={productsLoading}
+            />
+          )}
+
+          {step === 'design-pick' && (
+            <DesignPicker
+              products={products}
+              onPick={handleExistingDesignsPicked}
+            />
+          )}
+
+          {error && (
+            <div className="mx-4 my-3 rounded-[10px] bg-[var(--color-err)]/10 border border-[var(--color-err)]/30 px-3 py-2 text-[12px] text-[var(--color-err)]">
+              {error}
             </div>
           )}
         </div>
 
-        {/* Footer CTA */}
-        {step === 'color' && (
-          <div className="border-t border-[var(--color-hairline-soft)] px-3 py-3">
-            <CTA onClick={goDesign} variant="solid">
-              <Icon name="palette" size={16} color="white" /> 디자인 시작하기
-            </CTA>
-            <p className="mt-2 text-[10px] text-[var(--color-faint)] text-center leading-relaxed">
-              디자인 저장 시 단체 mall 카탈로그에 즉시 게시됩니다.
-            </p>
+        {submitting && (
+          <div className="border-t border-[var(--color-hairline-soft)] px-3 py-3 flex items-center justify-center gap-2 text-[12px] text-[var(--color-muted)]">
+            <Loader2 className="size-4 animate-spin" /> 단체 mall에 등록 중…
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// =====================================================================
+// 새 디자인용 제품 picker
+// =====================================================================
+function ProductPicker({
+  products,
+  search,
+  onSearchChange,
+  onPick,
+  isLoading,
+}: {
+  products: ProductRow[];
+  search: string;
+  onSearchChange: (v: string) => void;
+  onPick: (p: ProductRow) => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-2 border-b border-[var(--color-hairline-soft)]">
+        <Card padding="sm" className="flex items-center gap-2">
+          <Icon name="search" size={14} color="var(--color-faint)" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="제품명 · 제조사 · 코드 검색"
+            className="flex-1 outline-none text-[13px] bg-transparent"
+            autoFocus
+          />
+        </Card>
+        <p className="text-[10px] text-[var(--color-muted)] mt-1.5 leading-relaxed">
+          제품을 선택하면 인앱 에디터로 바로 디자인을 시작합니다. 저장하면 단체 mall에 등록됩니다.
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="p-8 text-center text-[12px] text-[var(--color-muted)]">불러오는 중...</div>
+        ) : products.length === 0 ? (
+          <div className="p-8 text-center text-[12px] text-[var(--color-muted)]">검색 결과 없음</div>
+        ) : (
+          <div className="divide-y divide-[var(--color-hairline-soft)]">
+            {products.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onPick(p)}
+                className="w-full px-4 py-3 flex items-center gap-3 active:bg-[var(--color-surface-alt)] text-left"
+              >
+                <div className="w-12 h-12 bg-[var(--color-surface-alt)] rounded-[10px] overflow-hidden flex-shrink-0">
+                  {p.thumbnail_image_link?.[0] && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={p.thumbnail_image_link[0]}
+                      alt={p.title}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-[var(--color-ink)] truncate">
+                    {p.title}
+                  </div>
+                  {(p.manufacturer_name || p.product_code) && (
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      {p.manufacturer_name && (
+                        <span className="text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">
+                          {p.manufacturer_name}
+                        </span>
+                      )}
+                      {p.product_code && (
+                        <span className="text-[10px] font-mono bg-[var(--color-brand-100)] text-[var(--color-brand-700)] px-1.5 py-0.5 rounded">
+                          {p.product_code}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-[11px] text-[var(--color-muted)] font-mono mt-0.5">
+                    {fmt(Number(p.base_price) || 0)}
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-[var(--color-brand-500)] flex items-center gap-0.5 flex-shrink-0">
+                  <Icon name="arrow-up-r" size={12} color="var(--color-brand-500)" />
+                  디자인 시작
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// 기존 디자인 picker
+// =====================================================================
+function DesignPicker({
+  products,
+  onPick,
+}: {
+  products: ProductRow[];
+  onPick: (designs: SavedDesignRow[]) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const { designs, total, totalPages, isLoading } = useSavedDesigns({ search, page, limit: 12 });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selected = designs.filter((d) => selectedIds.has(d.id) && d.product_id);
+  const productMap = new Map(products.map((p) => [p.id, p]));
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-2 border-b border-[var(--color-hairline-soft)]">
+        <Card padding="sm" className="flex items-center gap-2">
+          <Icon name="search" size={14} color="var(--color-faint)" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="디자인 제목 검색"
+            className="flex-1 outline-none text-[13px] bg-transparent"
+            autoFocus
+          />
+        </Card>
+        <p className="text-[10px] text-[var(--color-muted)] mt-1.5">
+          총 {total}개 · {selectedIds.size}개 선택됨
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3">
+        {isLoading ? (
+          <div className="p-8 text-center text-[12px] text-[var(--color-muted)]">불러오는 중...</div>
+        ) : designs.length === 0 ? (
+          <div className="p-8 text-center text-[12px] text-[var(--color-muted)]">디자인 없음</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {designs.map((d) => {
+              const product = d.product_id ? productMap.get(d.product_id) : null;
+              const checked = selectedIds.has(d.id);
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => toggle(d.id)}
+                  className={`text-left rounded-[10px] border-2 overflow-hidden ${
+                    checked
+                      ? 'border-[var(--color-brand-500)]'
+                      : 'border-[var(--color-hairline)]'
+                  }`}
+                >
+                  <div className="aspect-square bg-[var(--color-surface-alt)] relative flex items-center justify-center">
+                    {d.preview_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={d.preview_url} alt="" className="w-full h-full object-contain" />
+                    ) : (
+                      <Icon name="image" size={28} color="var(--color-faint)" />
+                    )}
+                    {checked && (
+                      <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--color-brand-500)] flex items-center justify-center">
+                        <Icon name="check" size={12} color="white" strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <p className="text-[11px] font-bold text-[var(--color-ink)] truncate">
+                      {d.title || '제목 없음'}
+                    </p>
+                    <p className="text-[10px] text-[var(--color-muted)] truncate">
+                      {product?.title ?? '제품 미연결'}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-3">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] flex items-center justify-center disabled:opacity-40"
+            >
+              <Icon name="chevron-l" size={14} />
+            </button>
+            <span className="text-[12px] text-[var(--color-muted)]">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] flex items-center justify-center disabled:opacity-40"
+            >
+              <Icon name="chevron-r" size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-[var(--color-hairline-soft)] p-3">
+        <button
+          onClick={() => onPick(selected)}
+          disabled={selected.length === 0}
+          className="w-full bg-[var(--color-brand-500)] text-white font-bold py-3 rounded-[14px] disabled:opacity-40 active:bg-[var(--color-brand-600)] flex items-center justify-center gap-1"
+        >
+          <Icon name="plus" size={16} color="white" />
+          {selected.length === 0 ? '디자인을 선택해주세요' : `${selected.length}개 배치`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActionTile({
+  icon,
+  label,
+  desc,
+  onClick,
+}: {
+  icon: 'palette' | 'image' | 'package';
+  label: string;
+  desc: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="bg-white border border-[var(--color-hairline)] rounded-[12px] p-3 flex flex-col items-center text-center active:bg-[var(--color-surface-alt)]"
+    >
+      <div className="w-9 h-9 rounded-full bg-[var(--color-brand-100)] flex items-center justify-center mb-1.5">
+        <Icon name={icon} size={18} color="var(--color-brand-500)" />
+      </div>
+      <span className="text-[12px] font-bold text-[var(--color-ink)]">{label}</span>
+      <span className="text-[10px] text-[var(--color-muted)] mt-0.5">{desc}</span>
+    </button>
   );
 }

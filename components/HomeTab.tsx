@@ -8,6 +8,7 @@ import {
   Icon,
 } from '@/components/ui';
 import type { GradeInfo } from '@/lib/grades';
+import { applyWithholding } from '@/lib/settlement';
 import type { Team } from '@/lib/teams';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
@@ -15,39 +16,43 @@ const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 export interface HomeTabProps {
   grade: GradeInfo;
   next: GradeInfo | null;
+  /** 결제 완료分(확정 매출) */
   thisMonthRevenue: number;
+  /** 미결제(pending) 대기 매출 */
+  thisMonthPendingRevenue: number;
   totalRevenue: number;
   teams: Team[];
   reorderDue: Team[];
-  newOrdersCount: number;
   couponCount: number;
   onCreateOrder: () => void;
   onOpenCalculator: () => void;
   onOpenTemplates: () => void;
   onOpenCoupons: () => void;
-  onOpenLevel: () => void;
+  onOpenEarnings: () => void;
   onOpenOrg: (teamId: string) => void;
-  onNavigate: (t: 'home' | 'map' | 'orgs' | 'tools' | 'profile') => void;
+  onNavigate: (t: 'home' | 'earnings' | 'orgs' | 'tools' | 'profile') => void;
 }
 
 export default function HomeTab({
   grade,
   next,
   thisMonthRevenue,
+  thisMonthPendingRevenue,
   totalRevenue,
   teams,
   reorderDue,
-  newOrdersCount,
   couponCount,
   onCreateOrder,
   onOpenCalculator,
   onOpenTemplates,
   onOpenCoupons,
-  onOpenLevel,
+  onOpenEarnings,
   onOpenOrg,
   onNavigate,
 }: HomeTabProps) {
-  const goal = next ? next.monthlyThreshold : grade.monthlyThreshold;
+  // 이번 달 내 예상 수수료(확정 매출 기준)와 실수령
+  const estCommission = Math.round(thisMonthRevenue * grade.commissionRate);
+  const net = applyWithholding(estCommission).net;
 
   return (
     <div className="bg-[var(--color-surface-alt)] min-h-full pb-8">
@@ -58,23 +63,40 @@ export default function HomeTab({
           next={next}
           thisMonthRevenue={thisMonthRevenue}
           couponCount={couponCount}
-          onClick={onOpenLevel}
+          onClick={onOpenEarnings}
         />
       </div>
 
-      {/* Earnings card */}
+      {/* Earnings card — 내가 버는 돈이 메인 */}
       <EarningsCard
-        label="이번 달 매출"
-        amount={thisMonthRevenue}
-        goal={goal}
+        label={`이번 달 예상 수수료 (${Math.round(grade.commissionRate * 100)}%)`}
+        amount={estCommission}
         yoyDelta={null}
         stats={[
-          { label: '신규 주문', value: newOrdersCount, suffix: '건' },
+          { label: '확정 매출', value: `${Math.round(thisMonthRevenue / 10000).toLocaleString('ko-KR')}`, suffix: '만원' },
+          { label: '실수령(예상)', value: `${Math.round(net / 10000).toLocaleString('ko-KR')}`, suffix: '만원' },
           { label: '활성 단체', value: teams.length, suffix: '곳' },
-          { label: '누적', value: `${Math.round(totalRevenue / 10000).toLocaleString('ko-KR')}`, suffix: '만원' },
         ]}
-        onDetail={() => onNavigate('tools')}
+        onDetail={onOpenEarnings}
       />
+
+      {/* 미결제 대기 — 결제되면 수수료로 전환 */}
+      {thisMonthPendingRevenue > 0 && (
+        <div className="px-3 mt-2">
+          <button
+            onClick={onOpenEarnings}
+            className="w-full bg-[var(--color-warn)]/10 border border-[var(--color-warn)]/25 rounded-[14px] px-4 py-2.5 flex items-center gap-2 text-left active:bg-[var(--color-warn)]/15"
+          >
+            <Icon name="clock" size={16} color="var(--color-warn-deep)" />
+            <div className="flex-1 min-w-0">
+              <span className="text-[12px] text-[var(--color-warn-deep)] font-bold">결제 대기 </span>
+              <span className="text-[12px] text-[var(--color-warn-deep)] font-mono num">{fmt(thisMonthPendingRevenue)}</span>
+              <span className="text-[11px] text-[var(--color-muted)]"> · 결제되면 수수료로 반영돼요</span>
+            </div>
+            <Icon name="chevron-r" size={14} color="var(--color-warn-deep)" />
+          </button>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="mt-3.5 px-3">
@@ -85,13 +107,13 @@ export default function HomeTab({
           items={[
             { icon: 'bolt',    label: '간편 견적', tint: 'primary', onClick: onOpenCalculator },
             { icon: 'palette', label: '템플릿',    tint: 'purple',  onClick: onOpenTemplates },
-            { icon: 'sparkle', label: '커스텀',    tint: 'success', onClick: onCreateOrder },
+            { icon: 'sparkle', label: '커스텀 주문', tint: 'success', onClick: onCreateOrder },
             { icon: 'tag',     label: '쿠폰',      tint: 'gold',    badge: couponCount, onClick: onOpenCoupons },
           ]}
         />
       </div>
 
-      {/* Reorder timing — warning tint */}
+      {/* Reorder timing — warning tint, 실데이터 */}
       <TintedSection
         title="재주문 타이밍"
         right={`${reorderDue.length}곳 임박`}
@@ -104,7 +126,7 @@ export default function HomeTab({
             재발주 임박 단체 없음
           </div>
         ) : (
-          reorderDue.slice(0, 3).map((team, i, arr) => (
+          reorderDue.slice(0, 4).map((team, i, arr) => (
             <ReorderRow
               key={team.id}
               team={team}
@@ -115,45 +137,6 @@ export default function HomeTab({
         )}
       </TintedSection>
 
-      {/* Recommended missions — primary tint, mock */}
-      <TintedSection
-        title="추천 미션"
-        right="지도에서 보기"
-        onRight={() => onNavigate('map')}
-        tint="primary"
-      >
-        {MOCK_MISSIONS.map((m, i, arr) => (
-          <MissionRow key={m.id} mission={m} divider={i < arr.length - 1} onClick={() => onNavigate('map')} />
-        ))}
-      </TintedSection>
-
-      {/* Activity feed */}
-      <TintedSection title="최근 활동">
-        {MOCK_FEED.map((f, i, arr) => (
-          <div
-            key={f.id}
-            className="flex items-center gap-3 px-4 py-3.5"
-            style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--color-hairline-soft)' : 'none' }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-              style={{
-                background:
-                  f.kind === 'reorder' ? 'var(--color-err)' :
-                  f.kind === 'mission' ? 'var(--color-brand-500)' :
-                  f.kind === 'coupon'  ? 'var(--color-gold)' :
-                                          'var(--color-pos)',
-              }}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="text-[14px] font-medium text-[var(--color-ink)] tracking-tight">{f.text}</div>
-              <div className="text-[11px] text-[var(--color-faint)] mt-0.5">{f.time}</div>
-            </div>
-            {f.urgent && <div className="text-[11px] font-bold text-[var(--color-err)]">긴급</div>}
-          </div>
-        ))}
-      </TintedSection>
-
       {/* Total link */}
       <div className="mt-3.5 px-3">
         <button
@@ -162,7 +145,7 @@ export default function HomeTab({
           style={{ boxShadow: 'var(--shadow-card-flat)', border: '1px solid var(--color-hairline-soft)' }}
         >
           <div className="text-left">
-            <div className="text-[11px] text-[var(--color-muted)] mb-0.5">관리 단체 / 누적 매출</div>
+            <div className="text-[11px] text-[var(--color-muted)] mb-0.5">관리 단체 / 누적 확정 매출</div>
             <div className="text-[13px] font-bold text-[var(--color-ink)]">
               {teams.length}개 · <span className="font-mono num">{fmt(totalRevenue)}</span>
             </div>
@@ -175,9 +158,13 @@ export default function HomeTab({
 }
 
 function ReorderRow({ team, divider, onClick }: { team: Team; divider: boolean; onClick: () => void }) {
-  const days = team.lastOrderDays != null && team.reorderCycleMonths != null
-    ? Math.max(0, team.reorderCycleMonths * 30 - team.lastOrderDays)
-    : null;
+  // 예상 발주일까지 남은 일수 — nextReorderDays(주문이력 기반)가 있으면 우선, 없으면 고정주기 계산 폴백
+  const days =
+    team.nextReorderDays != null
+      ? team.nextReorderDays
+      : team.lastOrderDays != null && team.reorderCycleMonths != null
+        ? Math.max(0, team.reorderCycleMonths * 30 - team.lastOrderDays)
+        : null;
   const overdue = days != null && days <= 3;
   return (
     <button
@@ -206,60 +193,3 @@ function ReorderRow({ team, divider, onClick }: { team: Team; divider: boolean; 
     </button>
   );
 }
-
-interface MockMission {
-  id: string;
-  name: string;
-  stage: 'lead' | 'contact' | 'quote' | 'first';
-  distance: string;
-  mission: string;
-  xp: number;
-}
-
-// 추천 미션 — 데모용. 실제 단체 이름은 데이터 연결 후 채워집니다.
-const MOCK_MISSIONS: MockMission[] = [
-  { id: 'm1', name: '샘플 단체 A', stage: 'contact', distance: '0.3km',  mission: '담당자 명함 받기',     xp: 30 },
-  { id: 'm2', name: '샘플 단체 B', stage: 'lead',    distance: '0.8km',  mission: '단가표 제시',          xp: 20 },
-  { id: 'm3', name: '샘플 단체 C', stage: 'quote',   distance: '1.2km',  mission: '견적서 회신 받기',     xp: 50 },
-];
-
-function MissionRow({ mission, divider, onClick }: { mission: MockMission; divider: boolean; onClick: () => void }) {
-  const stages = {
-    lead:    { label: '리드',   color: 'var(--color-faint)' },
-    contact: { label: '컨택',   color: 'var(--color-brand-500)' },
-    quote:   { label: '견적중', color: 'var(--color-warn-deep)' },
-    first:   { label: '첫주문', color: 'var(--color-err-strong)' },
-  };
-  const s = stages[mission.stage];
-  return (
-    <button
-      onClick={onClick}
-      className="w-full px-4 py-3.5 flex items-center gap-3 text-left"
-      style={{ borderBottom: divider ? '1px solid rgba(0,82,204,0.08)' : 'none' }}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold" style={{ color: s.color }}>{s.label}</span>
-          <span className="w-[3px] h-[3px] rounded-full bg-[var(--color-hairline)]" />
-          <div className="text-[15px] font-bold text-[var(--color-ink)] tracking-tight">{mission.name}</div>
-        </div>
-        <div className="text-[12px] text-[var(--color-muted)] mt-0.5">
-          {mission.distance} · {mission.mission}
-        </div>
-      </div>
-      <div className="text-right">
-        <div className="text-[14px] font-extrabold text-[var(--color-brand-500)]">+{mission.xp}</div>
-        <div className="text-[10px] text-[var(--color-muted)] font-semibold">XP</div>
-      </div>
-      <Icon name="chevron-r" size={18} color="var(--color-faint)" strokeWidth={2} />
-    </button>
-  );
-}
-
-// 최근 활동 — 데모용. 실제 단체 활동은 데이터 연결 후 채워집니다.
-const MOCK_FEED = [
-  { id: 'f1', kind: 'reorder' as const, text: '재주문 임박 단체 1건',     time: '오늘',         urgent: true },
-  { id: 'f2', kind: 'mission' as const, text: '명함 받기 미션 완료',       time: '어제',         urgent: false },
-  { id: 'f3', kind: 'coupon'  as const, text: '5% 쿠폰 1장 지급',          time: '5월 7일',      urgent: false },
-  { id: 'f4', kind: 'success' as const, text: '신규 단체 첫 주문 등록',    time: '5월 5일',      urgent: false },
-];

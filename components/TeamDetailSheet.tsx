@@ -104,6 +104,7 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
                   onAdd={() => setAddProductOpen(true)}
                   onOrderSingle={(p) => onCreateOrder(team.id, [p])}
                   onOrderMulti={(picked) => onCreateOrder(team.id, picked)}
+                  onMutate={refetchProducts}
                 />
               )}
               {tab === 'orders' && <OrdersTab orders={orders} isLoading={ordersLoading} />}
@@ -233,6 +234,35 @@ function OverviewTab({
           accent={team.status === 'reorder_due' ? 'var(--color-warn)' : undefined}
         />
       </div>
+
+      {/* 재주문 타이밍 — 주문이력 기반 자동주기 + 수동 override 안내 */}
+      {team.nextReorderDays !== null && (
+        <Card padding="md" className={team.status === 'reorder_due' ? 'bg-[var(--color-warn)]/8' : ''}>
+          <div className="flex items-center gap-3">
+            <div
+              className="w-11 h-11 rounded-[12px] flex items-center justify-center flex-shrink-0"
+              style={{
+                background: team.nextReorderDays <= 3 ? '#ffe1d4' : '#fde9c1',
+                color: team.nextReorderDays <= 3 ? 'var(--color-err-strong)' : 'var(--color-warn-deep)',
+              }}
+            >
+              <span className="text-[13px] font-extrabold leading-none">
+                {team.nextReorderDays <= 0 ? '지금' : `D-${team.nextReorderDays}`}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-[var(--color-ink)]">다음 예상 발주</p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                {cycleMonths != null
+                  ? `수동 설정 주기 ${cycleMonths}개월 기준`
+                  : team.avgReorderDays != null
+                    ? `과거 주문 평균 ${team.avgReorderDays}일 주기 기준`
+                    : '주문 이력 기준'}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Address */}
       <Section title="주소">
@@ -383,14 +413,18 @@ function ProductsTab({
   onAdd,
   onOrderSingle,
   onOrderMulti,
+  onMutate,
 }: {
   products: TeamProductRow[];
   loading: boolean;
   onAdd: () => void;
   onOrderSingle: (p: TeamProductRow) => void;
   onOrderMulti: (picked: TeamProductRow[]) => void;
+  onMutate: () => void | Promise<unknown>;
 }) {
   const [multi, setMulti] = useState(false);
+  const [manage, setManage] = useState(false);
+  const [editTarget, setEditTarget] = useState<TeamProductRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
@@ -451,22 +485,35 @@ function ProductsTab({
       {/* 상단 툴바 */}
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[var(--color-muted)]">
-          {multi ? '여러 제품을 골라 한 번에 주문' : '카드를 누르면 바로 주문할 수 있어요'}
+          {manage
+            ? '카드를 누르면 가격 변경·삭제'
+            : multi
+              ? '여러 제품을 골라 한 번에 주문'
+              : '카드를 누르면 바로 주문할 수 있어요'}
         </p>
         {multi ? (
-          <button
-            onClick={turnOffMulti}
-            className="text-[12px] font-bold text-[var(--color-muted)] px-2 py-1"
-          >
+          <button onClick={turnOffMulti} className="text-[12px] font-bold text-[var(--color-muted)] px-2 py-1">
             취소
           </button>
-        ) : (
-          <button
-            onClick={turnOnMulti}
-            className="text-[12px] font-bold text-[var(--color-brand-500)] px-2 py-1"
-          >
-            여러 개 선택
+        ) : manage ? (
+          <button onClick={() => setManage(false)} className="text-[12px] font-bold text-[var(--color-muted)] px-2 py-1">
+            완료
           </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setManage(true)}
+              className="text-[12px] font-bold text-[var(--color-muted)] px-2 py-1"
+            >
+              관리
+            </button>
+            <button
+              onClick={turnOnMulti}
+              className="text-[12px] font-bold text-[var(--color-brand-500)] px-2 py-1"
+            >
+              여러 개 선택
+            </button>
+          </div>
         )}
       </div>
 
@@ -480,13 +527,18 @@ function ProductsTab({
           return (
             <button
               key={p.id}
-              onClick={() => (multi ? toggle(p.id) : onOrderSingle(p))}
+              onClick={() => (manage ? setEditTarget(p) : multi ? toggle(p.id) : onOrderSingle(p))}
               className={`relative rounded-[14px] bg-[var(--color-surface)] ring-1 overflow-hidden text-left active:scale-[0.99] transition-transform ${
                 isSelected
                   ? 'ring-2 ring-[var(--color-brand-500)]'
                   : 'ring-[var(--color-hairline-soft)]'
               }`}
             >
+              {manage && (
+                <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/90 border border-[var(--color-hairline)] flex items-center justify-center z-10">
+                  <Icon name="edit" size={13} color="var(--color-brand-500)" />
+                </span>
+              )}
               {multi && (
                 <span
                   className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 ${
@@ -555,6 +607,129 @@ function ProductsTab({
           </button>
         </div>
       )}
+
+      {editTarget && (
+        <ProductManageModal
+          product={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={async () => {
+            setEditTarget(null);
+            await onMutate();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// 진열 제품 가격 변경 / 삭제
+function ProductManageModal({
+  product,
+  onClose,
+  onSaved,
+}: {
+  product: TeamProductRow;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const basePrice = product.product?.base_price ?? null;
+  const [price, setPrice] = useState<string>(product.price != null ? String(Math.round(product.price)) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const savePrice = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const parsed = Number(price);
+      const value = price.trim() && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
+      const res = await fetch('/api/team-products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, price: value }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `저장 실패 (${res.status})`);
+      }
+      await onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeProduct = async () => {
+    if (!confirm(`'${product.display_name || product.product?.title || '제품'}'을 진열에서 삭제할까요?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/team-products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `삭제 실패 (${res.status})`);
+      }
+      await onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9000] flex items-end justify-center bg-black/40 p-3" onClick={onClose}>
+      <div
+        className="bg-white rounded-[20px] w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-[15px] font-bold text-[var(--color-ink)] mb-1">
+          {product.display_name || product.product?.title || '제품'}
+        </p>
+        <p className="text-[11px] text-[var(--color-muted)] mb-3">
+          고객 판매가(개당)를 정해주세요. 비우면 기본가
+          {basePrice != null ? ` ₩${Math.round(basePrice).toLocaleString('ko-KR')}` : ''}로 노출됩니다.
+        </p>
+        <label className="block text-[11px] font-bold text-[var(--color-muted)] mb-1">판매가 (원)</label>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          autoFocus
+          placeholder={basePrice != null ? String(Math.round(basePrice)) : '예: 18000'}
+          className="w-full rounded-[12px] bg-[var(--color-surface-alt)] px-3 py-2.5 text-[14px] font-mono text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
+        />
+        {error && <p className="text-[11px] text-[var(--color-err)] mt-2">{error}</p>}
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={removeProduct}
+            disabled={busy}
+            className="px-3 py-2.5 rounded-[12px] bg-[var(--color-err)]/10 text-[var(--color-err)] text-[13px] font-bold flex items-center gap-1 disabled:opacity-50"
+          >
+            <Icon name="trash" size={14} color="var(--color-err)" /> 삭제
+          </button>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 px-3 py-2.5 rounded-[12px] bg-[var(--color-surface-alt)] text-[var(--color-body)] text-[13px] font-bold disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={savePrice}
+            disabled={busy}
+            className="flex-1 px-3 py-2.5 rounded-[12px] bg-[var(--color-brand-500)] text-white text-[13px] font-bold active:bg-[var(--color-brand-600)] disabled:opacity-50"
+          >
+            {busy ? '저장 중…' : '저장'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

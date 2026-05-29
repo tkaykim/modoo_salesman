@@ -25,6 +25,16 @@ export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, coup
     router.push('/login');
   };
 
+  // 업적 — 실데이터(누적/이번달 확정 매출, 등급, 쿠폰) 기반 개인 진척. 경쟁/타인 비교 없음.
+  const achievements: { id: string; icon: IconName; label: string; unlocked: boolean }[] = [
+    { id: 'first',   icon: 'trophy',    label: '첫 매출',     unlocked: totalRevenue > 0 },
+    { id: 'm100',    icon: 'star-fill', label: '누적 100만',  unlocked: totalRevenue >= 1_000_000 },
+    { id: 'm500',    icon: 'flame',     label: '누적 500만',  unlocked: totalRevenue >= 5_000_000 },
+    { id: 'coupon',  icon: 'gift',      label: '쿠폰 보유',   unlocked: couponCount > 0 },
+    { id: 'grade5',  icon: 'verified',  label: 'Lv.5 등급',   unlocked: grade.displayOrder >= 5 },
+    { id: 'month1k', icon: 'target',    label: '월 1천만',    unlocked: thisMonthRevenue >= 10_000_000 },
+  ];
+
   return (
     <div className="bg-[var(--color-surface-alt)] min-h-full pt-4 pb-8">
       {/* Profile header card */}
@@ -141,10 +151,10 @@ export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, coup
         )}
       </TintedSection>
 
-      {/* Achievements — placeholder */}
+      {/* Achievements — 실데이터 기반 개인 진척 */}
       <TintedSection title="업적">
         <div className="grid grid-cols-3 gap-2 p-3">
-          {ACHIEVEMENTS.map((a) => (
+          {achievements.map((a) => (
             <div key={a.id} className="text-center py-3">
               <div
                 className="w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-1.5"
@@ -267,7 +277,7 @@ export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, coup
       </div>
 
       <p className="text-[10px] text-[var(--color-faint)] text-center pt-4">
-        모두의 유니폼 영업사원 앱 v0.4
+        모두의 유니폼 영업사원 앱 v0.5
       </p>
 
       <MyOrdersSheet open={myOrdersOpen} onClose={() => setMyOrdersOpen(false)} />
@@ -283,15 +293,6 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-const ACHIEVEMENTS: { id: string; icon: IconName; label: string; unlocked: boolean }[] = [
-  { id: 'a1', icon: 'trophy',   label: '첫 주문',   unlocked: true },
-  { id: 'a2', icon: 'star-fill', label: '5단체 달성', unlocked: true },
-  { id: 'a3', icon: 'flame',    label: '연속 30일', unlocked: false },
-  { id: 'a4', icon: 'gift',     label: '쿠폰 마스터', unlocked: false },
-  { id: 'a5', icon: 'verified', label: '검증 완료',   unlocked: false },
-  { id: 'a6', icon: 'target',   label: '월 1억',     unlocked: false },
-];
 
 const EDU_PLACEHOLDERS = [
   { id: 'e1', kind: 'video' as const, category: '필수',     title: '영업사원 시작하기 (오리엔테이션)', meta: '영상 · 12분' },

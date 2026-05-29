@@ -17,10 +17,15 @@ export interface MyOrderRow {
   salesman_id: string | null;
   partner_mall_id: string | null;
   applied_coupon_id: string | null;
+  payment_link_token: string | null;
+  payment_link_expires_at: string | null;
   notes: string | null;
   created_at: string;
   partner_mall?: { name: string | null } | null;
 }
+
+const ORDER_SELECT =
+  'id, total_amount, original_amount, coupon_discount, payment_status, order_status, customer_name, customer_phone, shipping_method, salesman_id, partner_mall_id, applied_coupon_id, payment_link_token, payment_link_expires_at, notes, created_at';
 
 // 본인 attributed orders + 본인 owner mall 의 orders 합집합 (RLS 통과)
 export function useMyOrders() {
@@ -37,17 +42,13 @@ export function useMyOrders() {
       const [r1, r2] = await Promise.all([
         supabase
           .from('orders')
-          .select(
-            'id, total_amount, original_amount, coupon_discount, payment_status, order_status, customer_name, customer_phone, shipping_method, salesman_id, partner_mall_id, applied_coupon_id, notes, created_at, partner_mall:partner_malls(name)'
-          )
+          .select(`${ORDER_SELECT}, partner_mall:partner_malls(name)`)
           .eq('salesman_id', salesmanId!)
           .order('created_at', { ascending: false })
           .limit(100),
         supabase
           .from('orders')
-          .select(
-            'id, total_amount, original_amount, coupon_discount, payment_status, order_status, customer_name, customer_phone, shipping_method, salesman_id, partner_mall_id, applied_coupon_id, notes, created_at, partner_mall:partner_malls!inner(name, salesman_id)'
-          )
+          .select(`${ORDER_SELECT}, partner_mall:partner_malls!inner(name, salesman_id)`)
           .eq('partner_mall.salesman_id', salesmanId!)
           .order('created_at', { ascending: false })
           .limit(100),

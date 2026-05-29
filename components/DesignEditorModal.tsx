@@ -17,16 +17,23 @@ const ProductDesigner = dynamic(
   { ssr: false, loading: () => <div className="flex-1 bg-[#EBEBEB] animate-pulse" /> }
 );
 
+interface SaveMeta {
+  title: string;
+  /** 단체몰 고객 노출가(개당). 미입력이면 제품 기본가 노출. */
+  price?: number | null;
+}
+
 interface DesignEditorModalProps {
   productId: string;
   initialColor?: string;
-  onSaveComplete: (design: SavedDesignRow, meta?: { title: string }) => void;
+  onSaveComplete: (design: SavedDesignRow, meta?: SaveMeta) => void;
   onClose: () => void;
   /**
    * 저장 직전 호출. null 반환 시 저장 취소.
    * 반환된 title이 saveDesign과 onSaveComplete의 meta.title 양쪽에 사용됨.
+   * price를 함께 받아 단체몰 진열가로 전달한다.
    */
-  onBeforeSave?: () => Promise<{ title: string } | null>;
+  onBeforeSave?: () => Promise<SaveMeta | null>;
 }
 
 /**
@@ -153,10 +160,12 @@ export default function DesignEditorModal({
     if (!productConfig || saving) return;
 
     let resolvedTitle: string | undefined = undefined;
+    let resolvedPrice: number | null | undefined = undefined;
     if (onBeforeSave) {
       const decision = await onBeforeSave();
       if (decision === null) return; // 사용자가 취소
       resolvedTitle = decision.title;
+      resolvedPrice = decision.price;
     }
 
     setSaving(true);
@@ -191,7 +200,10 @@ export default function DesignEditorModal({
         updated_at: result.updated_at,
       };
 
-      onSaveComplete(designRow, resolvedTitle ? { title: resolvedTitle } : undefined);
+      onSaveComplete(
+        designRow,
+        resolvedTitle ? { title: resolvedTitle, price: resolvedPrice } : undefined,
+      );
     } catch (e) {
       console.error('[DesignEditorModal] save error:', e);
       alert('디자인 저장 중 오류가 발생했습니다.');

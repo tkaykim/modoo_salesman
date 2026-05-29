@@ -15,11 +15,11 @@ import PriceCalculatorSheet from '@/components/PriceCalculatorSheet';
 import HomeTab from '@/components/HomeTab';
 import OrgsTab from '@/components/OrgsTab';
 import ToolsTab from '@/components/ToolsTab';
-import MapTab from '@/components/MapTab';
+import PerformanceTab from '@/components/PerformanceTab';
 import ProfileTab from '@/components/ProfileTab';
 import type { TeamProductRow } from '@/hooks/useTeamProducts';
 
-type Tab = 'home' | 'map' | 'orgs' | 'tools' | 'profile';
+type Tab = 'home' | 'earnings' | 'orgs' | 'tools' | 'profile';
 
 export default function MobileApp() {
   const [tab, setTab] = useState<Tab>('home');
@@ -49,7 +49,7 @@ export default function MobileApp() {
   const { user } = useSalesmanStore();
   const { teams, mutate: refetchTeams } = useMyTeams();
   const { coupons, primary: primaryCoupon } = useMyCoupons();
-  const { thisMonthRevenue, totalRevenue } = useMyRevenue();
+  const { thisMonthRevenue, thisMonthPendingRevenue, totalRevenue } = useMyRevenue();
   const { findNext } = useGradeLevels();
 
   const grade = getGrade(user?.grade);
@@ -59,17 +59,16 @@ export default function MobileApp() {
     : null;
   const reorderDue = teams.filter((t) => t.status === 'reorder_due');
   const couponCount = coupons.length;
-  const newOrdersCount = teams.reduce((acc, t) => acc + (t.lastOrderDays != null && t.lastOrderDays <= 30 ? 1 : 0), 0);
 
   const openOrder = (teamId: string | null = null) =>
     setOrderV2({ open: true, teamId, initialMallProducts: [] });
 
   const tabItems: TabItem<Tab>[] = [
-    { id: 'home',    icon: 'home',  label: '홈' },
-    { id: 'map',     icon: 'map',   label: '지도' },
-    { id: 'orgs',    icon: 'group', label: '단체', badge: reorderDue.length },
-    { id: 'tools',   icon: 'grid',  label: '도구' },
-    { id: 'profile', icon: 'user',  label: '마이' },
+    { id: 'home',     icon: 'home',   label: '홈' },
+    { id: 'earnings', icon: 'wallet', label: '수입' },
+    { id: 'orgs',     icon: 'group',  label: '단체', badge: reorderDue.length },
+    { id: 'tools',    icon: 'grid',   label: '도구' },
+    { id: 'profile',  icon: 'user',   label: '마이' },
   ];
 
   return (
@@ -126,21 +125,21 @@ export default function MobileApp() {
                 grade={grade}
                 next={nextInfo}
                 thisMonthRevenue={thisMonthRevenue}
+                thisMonthPendingRevenue={thisMonthPendingRevenue}
                 totalRevenue={totalRevenue}
                 teams={teams}
                 reorderDue={reorderDue}
-                newOrdersCount={newOrdersCount}
                 couponCount={couponCount}
                 onCreateOrder={() => openOrder(null)}
                 onOpenCalculator={() => setCalcOpen(true)}
                 onOpenTemplates={() => openOrder(null)}
                 onOpenCoupons={() => setTab('profile')}
-                onOpenLevel={() => setTab('profile')}
+                onOpenEarnings={() => setTab('earnings')}
                 onOpenOrg={(teamId) => setDetailTeamId(teamId)}
                 onNavigate={setTab}
               />
             )}
-            {tab === 'map' && <MapTab />}
+            {tab === 'earnings' && <PerformanceTab />}
             {tab === 'orgs' && (
               <OrgsTab
                 teams={teams}

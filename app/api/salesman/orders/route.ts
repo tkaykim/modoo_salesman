@@ -172,10 +172,12 @@ export async function POST(request: Request) {
     preview_url: string | null;
     display_name: string | null;
   }>();
+  // 진열 상품의 영업사원 설정 판매가 — mall 출처 품목의 권위 단가.
+  const mallPriceMap = new Map<string, number>();
   if (mallProductIds.length > 0) {
     const { data } = await admin
       .from('partner_mall_products')
-      .select('id, display_name, color_hex, color_name, color_code, canvas_state, preview_url, partner_mall_id')
+      .select('id, display_name, color_hex, color_name, color_code, canvas_state, preview_url, partner_mall_id, price')
       .in('id', mallProductIds);
     for (const m of data ?? []) {
       // 진열 출처가 본인 mall이 아니면 거부 (단, partnerMallId가 명시된 경우만 강제)
@@ -195,6 +197,9 @@ export async function POST(request: Request) {
         preview_url: (m.preview_url as string | null) ?? null,
         display_name: (m.display_name as string | null) ?? null,
       });
+      if (typeof m.price === 'number' && Number.isFinite(m.price) && m.price > 0) {
+        mallPriceMap.set(m.id as string, m.price);
+      }
     }
   }
 
@@ -217,6 +222,13 @@ export async function POST(request: Request) {
       const dp = designPriceMap.get(it.designId);
       if (typeof dp === 'number' && Number.isFinite(dp) && dp > 0) {
         authoritativePrice = dp;
+      }
+    }
+    // 진열(mall) 출처 품목은 영업사원이 설정한 판매가를 권위 단가로 사용.
+    if (authoritativePrice == null && it.partnerMallProductId) {
+      const mp = mallPriceMap.get(it.partnerMallProductId);
+      if (typeof mp === 'number' && Number.isFinite(mp) && mp > 0) {
+        authoritativePrice = mp;
       }
     }
     if (authoritativePrice == null) {
@@ -248,7 +260,8 @@ export async function POST(request: Request) {
   const paymentLinkExpiresAt = paymentLinkToken
     ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     : null;
-  const paymentStatus = body.paymentType === 'completed' ? 'paid' : 'pending';
+  // 결제 완료 상태값은 시스템 표준 'completed' 사용 (과거 'paid'는 정산/매출 집계와 불일치했음)
+  const paymentStatus = body.paymentType === 'completed' ? 'completed' : 'pending';
   const orderStatus = body.paymentType === 'completed' ? 'payment_completed' : 'payment_pending';
   const paymentMethod =
     body.paymentType === 'bank_transfer' ? 'bank_transfer'

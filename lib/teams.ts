@@ -79,6 +79,10 @@ export interface Team {
   lastOrderAt: string | null;
   lastOrderAmount: number;
   lastOrderDays: number | null;
+  /** 주문이력 기반 평균 발주 주기(일). 데이터 부족 시 null */
+  avgReorderDays: number | null;
+  /** 다음 예상 발주일까지 남은 일수(음수=경과). 데이터 부족 시 null */
+  nextReorderDays: number | null;
   history: OrderAggregate['history'];
   status: TeamStatus;
 }
@@ -91,23 +95,42 @@ const DEFAULT_AGG: OrderAggregate = {
   history: [],
 };
 
+/**
+ * 주문이력(날짜 배열)에서 평균 발주 주기(일)를 산출한다.
+ * 주문이 2건 미만이면 주기를 알 수 없어 null.
+ */
+export function computeAvgReorderDays(orderDates: Array<string | null | undefined>): number | null {
+  const times = orderDates
+    .map((d) => (d ? new Date(d).getTime() : NaN))
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b);
+  if (times.length < 2) return null;
+  const span = times[times.length - 1] - times[0];
+  const gaps = times.length - 1;
+  const avg = span / gaps / (1000 * 60 * 60 * 24);
+  return avg > 0 ? Math.round(avg) : null;
+}
+
+/**
+ * 재발주 주기(일) 기준 단체 상태. cycleDays는 수동 override(reorderCycleMonths) 또는
+ * 주문이력 기반 평균(avgReorderDays)에서 도출된 유효 주기.
+ */
 export function computeStatus(
   totalOrders: number,
   lastOrderDays: number | null,
-  cycleMonths: number | null
+  cycleDays: number | null
 ): TeamStatus {
   if (totalOrders === 0) return 'new';
   if (lastOrderDays === null) return 'new';
   // 첫 거래 후 30일 이내 = new (방금 거래 시작)
   if (totalOrders === 1 && lastOrderDays <= 30) return 'new';
-  if (cycleMonths === null) {
-    // 사이클 미정 — 6개월 무거래면 dormant, 아니면 active
+  if (cycleDays === null) {
+    // 주기 미정 — 6개월 무거래면 dormant, 아니면 active
     return lastOrderDays > 180 ? 'dormant' : 'active';
   }
-  const cycleDays = cycleMonths * 30;
-  // 사이클 80% 이상 경과 = 재발주 임박
+  // 주기 80% 이상 경과 = 재발주 임박 (소진 직전 알림: 연구 권장)
   if (lastOrderDays >= cycleDays * 0.8 && lastOrderDays <= cycleDays * 1.5) return 'reorder_due';
-  // 사이클 1.5배 초과 = 휴면
+  // 주기 1.5배 초과 = 휴면
   if (lastOrderDays > cycleDays * 1.5) return 'dormant';
   return 'active';
 }
@@ -125,6 +148,15 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
       ? [{ name: meta.decisionMaker, phone: meta.phone, isPrimary: true }]
       : [];
   const primary = contacts.find((c) => c.isPrimary) ?? contacts[0] ?? null;
+
+  // 재발주 주기: 수동 override(reorderCycleMonths) 우선, 없으면 주문이력 평균.
+  const avgReorderDays = computeAvgReorderDays((agg.history ?? []).map((h) => h.date));
+  const manualCycleDays = meta.reorderCycleMonths != null ? meta.reorderCycleMonths * 30 : null;
+  const effectiveCycleDays = manualCycleDays ?? avgReorderDays;
+  const nextReorderDays =
+    effectiveCycleDays != null && lastOrderDays != null
+      ? Math.round(effectiveCycleDays - lastOrderDays)
+      : null;
 
   return {
     id: row.id,
@@ -148,8 +180,10 @@ export function mapPartnerMallToTeam(row: PartnerMallRow, agg: OrderAggregate = 
     lastOrderAt: agg.lastOrderAt,
     lastOrderAmount: agg.lastOrderAmount,
     lastOrderDays,
+    avgReorderDays,
+    nextReorderDays,
     history: agg.history,
-    status: computeStatus(agg.totalOrders, lastOrderDays, meta.reorderCycleMonths ?? null),
+    status: computeStatus(agg.totalOrders, lastOrderDays, effectiveCycleDays),
   };
 }
 

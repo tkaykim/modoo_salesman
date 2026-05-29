@@ -35,14 +35,17 @@ export default function AddTeamProductFlow({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 새 디자인 저장 직전 제목 입력 모달
+  // 새 디자인 저장 직전 제목·가격 입력 모달
+  type SaveMeta = { title: string; price: number | null };
   type TitlePrompt = {
     defaultValue: string;
-    resolve: (value: string | null) => void;
+    resolve: (value: SaveMeta | null) => void;
   };
   const [titlePrompt, setTitlePrompt] = useState<TitlePrompt | null>(null);
   const [titleInput, setTitleInput] = useState('');
+  const [priceInput, setPriceInput] = useState('');
   const [titleSavedName, setTitleSavedName] = useState<string | null>(null);
+  const [savedPrice, setSavedPrice] = useState<number | null>(null);
 
   const { products, isLoading: productsLoading } = useProducts();
 
@@ -59,7 +62,9 @@ export default function AddTeamProductFlow({
     setError(null);
     setTitlePrompt(null);
     setTitleInput('');
+    setPriceInput('');
     setTitleSavedName(null);
+    setSavedPrice(null);
   };
 
   useEffect(() => {
@@ -72,14 +77,15 @@ export default function AddTeamProductFlow({
     return [mall, productTitle].filter(Boolean).join(' ');
   };
 
-  // DesignEditorModal에서 저장 직전에 호출 — 제목 모달 띄우고 응답 대기
-  const promptForTitle = (): Promise<{ title: string } | null> => {
+  // DesignEditorModal에서 저장 직전에 호출 — 제목·가격 모달 띄우고 응답 대기
+  const promptForTitle = (): Promise<SaveMeta | null> => {
     return new Promise((resolve) => {
       const defaultValue = buildDefaultTitle(editingProduct);
       setTitleInput(defaultValue);
+      setPriceInput(editingProduct?.base_price ? String(Math.round(Number(editingProduct.base_price))) : '');
       setTitlePrompt({
         defaultValue,
-        resolve: (value) => resolve(value === null ? null : { title: value }),
+        resolve,
       });
     });
   };
@@ -87,8 +93,11 @@ export default function AddTeamProductFlow({
   const confirmTitle = () => {
     const trimmed = titleInput.trim();
     if (!trimmed) return;
+    const parsed = Number(priceInput);
+    const price = priceInput.trim() && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
     setTitleSavedName(trimmed);
-    titlePrompt?.resolve(trimmed);
+    setSavedPrice(price);
+    titlePrompt?.resolve({ title: trimmed, price });
     setTitlePrompt(null);
   };
 
@@ -103,6 +112,7 @@ export default function AddTeamProductFlow({
     displayName: string;
     canvasState: Record<string, unknown>;
     previewUrl: string | null;
+    price: number | null;
   }) => {
     if (!teamId) throw new Error('teamId 누락');
     const res = await fetch('/api/team-products', {
@@ -119,6 +129,7 @@ export default function AddTeamProductFlow({
         logo_placements: {},
         canvas_state: params.canvasState,
         preview_url: params.previewUrl,
+        price: params.price,
       }),
     });
     if (!res.ok) {
@@ -129,7 +140,10 @@ export default function AddTeamProductFlow({
   };
 
   // 새 디자인: 에디터 저장 완료 후 단체 mall에 배치
-  const handleNewDesignSaved = async (design: SavedDesignRow, meta?: { title: string }) => {
+  const handleNewDesignSaved = async (
+    design: SavedDesignRow,
+    meta?: { title: string; price?: number | null },
+  ) => {
     if (!editingProduct) return;
     setSubmitting(true);
     setError(null);
@@ -144,12 +158,14 @@ export default function AddTeamProductFlow({
 
       const finalTitle =
         meta?.title ?? titleSavedName ?? buildDefaultTitle(editingProduct) ?? editingProduct.title;
+      const finalPrice = meta?.price ?? savedPrice ?? null;
 
       await placeOne({
         productId: editingProduct.id,
         displayName: finalTitle,
         canvasState: (full?.canvas_state as Record<string, unknown> | null) ?? {},
         previewUrl: full?.preview_url ?? design.preview_url ?? null,
+        price: finalPrice,
       });
 
       onCreated?.();
@@ -180,6 +196,8 @@ export default function AddTeamProductFlow({
           displayName: d.title ?? buildDefaultTitle(null) ?? '디자인',
           canvasState: (full?.canvas_state as Record<string, unknown> | null) ?? {},
           previewUrl: full?.preview_url ?? d.preview_url ?? null,
+          // 기존 디자인 다건 배치는 가격 미지정으로 두고, 진열 후 가격을 편집한다.
+          price: d.price_per_item && d.price_per_item > 0 ? d.price_per_item : null,
         });
       }
       onCreated?.();
@@ -207,21 +225,35 @@ export default function AddTeamProductFlow({
         {titlePrompt && (
           <div className="fixed inset-0 z-[9500] flex items-center justify-center bg-black/50 px-5">
             <div className="w-full max-w-sm rounded-[18px] bg-white p-5 shadow-2xl">
-              <h3 className="text-[15px] font-bold text-[var(--color-ink)]">디자인 이름</h3>
+              <h3 className="text-[15px] font-bold text-[var(--color-ink)]">제품 이름 · 판매가</h3>
               <p className="mt-1 text-[12px] text-[var(--color-muted)] leading-relaxed">
-                나중에 이 디자인을 다시 찾을 때 쓰는 이름이에요. 기본값을 그대로 써도 됩니다.
+                단체 전용몰에 진열될 이름과 고객 판매가(개당)예요. 가격을 비우면 제품 기본가로 노출됩니다.
               </p>
+              <label className="mt-3 block text-[11px] font-bold text-[var(--color-muted)]">제품 이름</label>
               <input
                 type="text"
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') confirmTitle();
-                  else if (e.key === 'Escape') cancelTitle();
+                  if (e.key === 'Escape') cancelTitle();
                 }}
                 autoFocus
                 placeholder={titlePrompt.defaultValue}
-                className="mt-3 w-full rounded-[12px] bg-[var(--color-surface-alt)] px-3 py-2.5 text-[13px] text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
+                className="mt-1 w-full rounded-[12px] bg-[var(--color-surface-alt)] px-3 py-2.5 text-[13px] text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
+              />
+              <label className="mt-3 block text-[11px] font-bold text-[var(--color-muted)]">고객 판매가 (개당, 원)</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmTitle();
+                  else if (e.key === 'Escape') cancelTitle();
+                }}
+                placeholder="예: 18000 (비우면 기본가)"
+                className="mt-1 w-full rounded-[12px] bg-[var(--color-surface-alt)] px-3 py-2.5 text-[13px] font-mono text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)]"
               />
               <div className="mt-4 flex gap-2">
                 <button

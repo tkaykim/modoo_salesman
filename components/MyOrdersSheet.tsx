@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Icon, Card, Chip, HairLine } from '@/components/ui';
 import { useMyOrders, type MyOrderRow } from '@/hooks/useMyOrders';
+import { buildPaymentLinkUrl, paymentLinkExpiry, paymentLinkMessage } from '@/lib/paymentLink';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
@@ -206,6 +207,78 @@ function OrderCard({ order }: { order: MyOrderRow }) {
           </span>
         </div>
       ) : null}
+
+      {order.payment_status === 'pending' && order.payment_link_token && (
+        <PaymentLinkActions order={order} />
+      )}
     </Card>
+  );
+}
+
+// 미결제 주문의 결제 링크 재발송 — 생성 직후 1회만 보이던 링크를 주문 내역에서 다시 꺼내 쓴다.
+function PaymentLinkActions({ order }: { order: MyOrderRow }) {
+  const [copied, setCopied] = useState(false);
+  const url = buildPaymentLinkUrl(order.payment_link_token);
+  const exp = paymentLinkExpiry(order.payment_link_expires_at);
+  if (!url) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // noop
+    }
+  };
+
+  const kakaoSend = () => {
+    const text = paymentLinkMessage({
+      orderId: order.id,
+      url,
+      customerName: order.customer_name,
+      amount: Number(order.total_amount) || null,
+    });
+    // 카카오 SDK 미연동 환경 — 시스템 공유 우선, 없으면 링크 복사
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      navigator.share({ title: `주문 ${order.id} 결제`, text, url }).catch(() => {});
+    } else {
+      copy();
+    }
+  };
+
+  return (
+    <>
+      <HairLine className="my-2" />
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] text-[var(--color-muted)]">결제 링크</span>
+        {exp.hasExpiry && (
+          <span
+            className={`text-[10px] font-bold ${exp.expired ? 'text-[var(--color-err)]' : 'text-[var(--color-warn-deep)]'}`}
+          >
+            {exp.expired ? '만료됨 — 본사에 재발급 요청' : `만료 D-${exp.daysLeft}`}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={copy}
+          className={`flex-1 py-2 rounded-[10px] text-[12px] font-bold flex items-center justify-center gap-1 ${
+            copied
+              ? 'bg-[var(--color-pos)]/10 text-[var(--color-pos)]'
+              : 'bg-[var(--color-brand-500)] text-white active:bg-[var(--color-brand-600)]'
+          }`}
+        >
+          <Icon name={copied ? 'check' : 'share'} size={13} color={copied ? 'var(--color-pos)' : 'white'} />
+          {copied ? '복사됨' : '링크 복사'}
+        </button>
+        <button
+          onClick={kakaoSend}
+          className="flex-1 py-2 rounded-[10px] text-[12px] font-bold bg-[#FEE500] text-[#191600] active:opacity-90 flex items-center justify-center gap-1"
+        >
+          <span aria-hidden>💬</span> 고객에게 전송
+        </button>
+      </div>
+    </>
   );
 }

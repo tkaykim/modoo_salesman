@@ -6,6 +6,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 interface OrderRow { total_amount: number | null; created_at: string }
+
+// 결제 완료分만 정산 대상. pending(미결제)·refunded(환불)·cancelled(취소) 주문은 제외한다.
+// payment_status 표준값은 'completed' (영업앱이 과거 'paid'로 쓴 row도 있어 둘 다 허용).
+const PAID_STATUSES = ['completed', 'paid'];
 interface SalesmanRow { id: string; grade: string | null; status: string | null }
 interface GradeRow { level: string; commission_rate: number }
 
@@ -55,6 +59,8 @@ Deno.serve(async (req) => {
         .from('orders')
         .select('total_amount, created_at')
         .eq('salesman_id', sm.id)
+        .in('payment_status', PAID_STATUSES)
+        .neq('order_status', 'cancelled')
         .gte('created_at', start)
         .lt('created_at', end);
       if (oErr) {

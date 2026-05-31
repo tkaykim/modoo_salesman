@@ -100,6 +100,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '본인이 담당하는 단체만 수정할 수 있습니다.' }, { status: 403 });
   }
 
+  // 판매가 항상 확정: 미지정이면 제품 기본가로 폴백(고객 몰/주문 단가 일관성).
+  let price = normalizePrice(payload.price);
+  if (price == null) {
+    const { data: prod } = await admin
+      .from('products')
+      .select('base_price')
+      .eq('id', payload.product_id)
+      .maybeSingle();
+    price = normalizePrice(prod?.base_price as number | null | undefined);
+  }
+
   const now = new Date().toISOString();
   const { data, error } = await admin
     .from('partner_mall_products')
@@ -114,7 +125,7 @@ export async function POST(request: Request) {
       logo_placements: payload.logo_placements ?? {},
       canvas_state: payload.canvas_state ?? {},
       preview_url: payload.preview_url ?? null,
-      price: normalizePrice(payload.price),
+      price,
       created_at: now,
       updated_at: now,
     })
@@ -152,7 +163,20 @@ export async function PATCH(request: Request) {
   if (!owns.ok) return owns.res;
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if ('price' in payload) patch.price = normalizePrice(payload.price);
+  if ('price' in payload) {
+    let price = normalizePrice(payload.price);
+    if (price == null) {
+      // 판매가 항상 확정: 비우면 해당 제품 기본가로 폴백.
+      const { data: row } = await admin
+        .from('partner_mall_products')
+        .select('product:products ( base_price )')
+        .eq('id', payload.id)
+        .maybeSingle();
+      const base = (row as { product?: { base_price?: number | null } } | null)?.product?.base_price;
+      price = normalizePrice(base);
+    }
+    patch.price = price;
+  }
   if ('display_name' in payload) patch.display_name = payload.display_name?.trim() || null;
 
   const { data, error } = await admin

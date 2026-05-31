@@ -207,6 +207,70 @@ export function calcOrderPricing(
 }
 
 // =====================================================================
+// canvas_state 기반 인쇄 추가가 산출
+// modoo_app lib/partnerMallPricing.ts(calculateLogoAdditionalPrice)의 canvas 버전.
+// 단체몰 진열 시 "기본가 + 인쇄가" 판매가 기본값을 제안하기 위함.
+// canvas_state의 이미지/텍스트 오브젝트 data에 박힌 widthMm/heightMm/printMethod를 읽어
+// 사이즈 카테고리를 판정하고 인쇄 단가를 합산한다.
+// =====================================================================
+function printSizeFromMm(widthMm: number, heightMm: number): PrintSize {
+  if (widthMm <= 100 && heightMm <= 100) return '10x10';
+  if (widthMm <= 210 && heightMm <= 297) return 'A4';
+  return 'A3';
+}
+
+interface CanvasObjectLike {
+  type?: string;
+  data?: {
+    widthMm?: number;
+    heightMm?: number;
+    printMethod?: string;
+  };
+}
+
+function parseSide(side: unknown): CanvasObjectLike[] {
+  let obj: unknown = side;
+  if (typeof side === 'string') {
+    try { obj = JSON.parse(side); } catch { return []; }
+  }
+  const objects = (obj as { objects?: unknown })?.objects;
+  return Array.isArray(objects) ? (objects as CanvasObjectLike[]) : [];
+}
+
+/**
+ * canvas_state(사이드별 Fabric JSON)에서 인쇄 추가가 합산.
+ * 각 디자인 오브젝트의 data.printMethod(없으면 dtf)와 widthMm/heightMm로 단가를 더한다.
+ * config 미지정 시 DEFAULT_PRINT_PRICING 사용(영업사원 제안값 — 확정은 사용자가 조정).
+ */
+export function calcPrintAddonFromCanvasState(
+  canvasState: Record<string, unknown> | null | undefined,
+  config: PrintPricingConfig = DEFAULT_PRINT_PRICING,
+): number {
+  if (!canvasState || typeof canvasState !== 'object') return 0;
+  let total = 0;
+  for (const sideVal of Object.values(canvasState)) {
+    for (const o of parseSide(sideVal)) {
+      const data = o?.data;
+      if (!data) continue;
+      const w = Number(data.widthMm);
+      const h = Number(data.heightMm);
+      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) continue;
+      const method = normalizePrintMethod(data.printMethod) ?? 'dtf';
+      const size = printSizeFromMm(w, h);
+      // 인쇄가 산정은 1피스 기준(개당 단가). bulk(나염/자수)도 baseQuantity=1 가정으로 개당 환산은
+      // 과하므로, 진열 제안값은 transfer(dtf/dtg) 정액만 가산하고 bulk는 1개 기준 calcPrintTotal 사용.
+      if (method === 'dtf' || method === 'dtg') {
+        const conf = config[method] as TransferPricing;
+        total += conf.sizes[size] ?? 0;
+      } else {
+        total += calcPrintTotal(config, method, size, 1);
+      }
+    }
+  }
+  return Math.round(total);
+}
+
+// =====================================================================
 // 쿠폰 할인 적용 — modoo_admin coupons.discount_type 매칭
 // =====================================================================
 export interface CouponLite {

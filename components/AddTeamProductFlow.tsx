@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts';
+import { calcPrintAddonFromCanvasState } from '@/lib/pricing';
 import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
 import DesignEditorModal from '@/components/DesignEditorModal';
 import { Card, Icon } from '@/components/ui';
@@ -77,24 +78,26 @@ export default function AddTeamProductFlow({
     return [mall, productTitle].filter(Boolean).join(' ');
   };
 
-  // DesignEditorModal에서 저장 직전에 호출 — 제목·가격 모달 띄우고 응답 대기
-  const promptForTitle = (): Promise<SaveMeta | null> => {
+  // DesignEditorModal에서 저장 직전에 호출 — 제목·가격 모달 띄우고 응답 대기.
+  // ctx.printAddon: 현재 디자인 인쇄 추가가 → 기본 판매가 = base_price + printAddon 제안.
+  const promptForTitle = (ctx: { printAddon: number }): Promise<SaveMeta | null> => {
     return new Promise((resolve) => {
       const defaultValue = buildDefaultTitle(editingProduct);
+      const base = Math.round(Number(editingProduct?.base_price) || 0);
+      const suggested = base + Math.max(0, Math.round(ctx?.printAddon || 0));
       setTitleInput(defaultValue);
-      setPriceInput(editingProduct?.base_price ? String(Math.round(Number(editingProduct.base_price))) : '');
-      setTitlePrompt({
-        defaultValue,
-        resolve,
-      });
+      setPriceInput(suggested > 0 ? String(suggested) : '');
+      setTitlePrompt({ defaultValue, resolve });
     });
   };
 
   const confirmTitle = () => {
     const trimmed = titleInput.trim();
     if (!trimmed) return;
+    // 판매가는 항상 확정: 비우거나 잘못 입력하면 제품 기본가로 폴백(절대 null 아님).
+    const base = Math.round(Number(editingProduct?.base_price) || 0);
     const parsed = Number(priceInput);
-    const price = priceInput.trim() && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
+    const price = priceInput.trim() && Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : base;
     setTitleSavedName(trimmed);
     setSavedPrice(price);
     titlePrompt?.resolve({ title: trimmed, price });
@@ -158,7 +161,9 @@ export default function AddTeamProductFlow({
 
       const finalTitle =
         meta?.title ?? titleSavedName ?? buildDefaultTitle(editingProduct) ?? editingProduct.title;
-      const finalPrice = meta?.price ?? savedPrice ?? null;
+      // 판매가 항상 확정: 미입력 시 제품 기본가로 폴백.
+      const baseFallback = Math.round(Number(editingProduct.base_price) || 0);
+      const finalPrice = meta?.price ?? savedPrice ?? baseFallback;
 
       await placeOne({
         productId: editingProduct.id,
@@ -191,13 +196,21 @@ export default function AddTeamProductFlow({
           .select('canvas_state, preview_url')
           .eq('id', d.id)
           .maybeSingle();
+        const canvasState = (full?.canvas_state as Record<string, unknown> | null) ?? {};
+        // 판매가 항상 확정: 저장된 단가 우선, 없으면 base + 인쇄가, 그것도 없으면 base.
+        const prod = products.find((p) => p.id === d.product_id);
+        const base = Math.round(Number(prod?.base_price) || 0);
+        const addon = calcPrintAddonFromCanvasState(canvasState);
+        const price =
+          d.price_per_item && d.price_per_item > 0
+            ? Math.round(d.price_per_item)
+            : base + addon;
         await placeOne({
           productId: d.product_id!,
           displayName: d.title ?? buildDefaultTitle(null) ?? '디자인',
-          canvasState: (full?.canvas_state as Record<string, unknown> | null) ?? {},
+          canvasState,
           previewUrl: full?.preview_url ?? d.preview_url ?? null,
-          // 기존 디자인 다건 배치는 가격 미지정으로 두고, 진열 후 가격을 편집한다.
-          price: d.price_per_item && d.price_per_item > 0 ? d.price_per_item : null,
+          price,
         });
       }
       onCreated?.();
@@ -227,7 +240,8 @@ export default function AddTeamProductFlow({
             <div className="w-full max-w-sm rounded-[18px] bg-white p-5 shadow-2xl">
               <h3 className="text-[15px] font-bold text-[var(--color-ink)]">제품 이름 · 판매가</h3>
               <p className="mt-1 text-[12px] text-[var(--color-muted)] leading-relaxed">
-                단체 전용몰에 진열될 이름과 고객 판매가(개당)예요. 가격을 비우면 제품 기본가로 노출됩니다.
+                단체 전용몰에 진열될 이름과 고객 판매가(개당)예요. 기본값은 <b>제품가 + 예상 인쇄가</b>이며,
+                마진을 더해 실제 판매가로 조정하세요. (비우면 제품 기본가로 확정)
               </p>
               <label className="mt-3 block text-[11px] font-bold text-[var(--color-muted)]">제품 이름</label>
               <input

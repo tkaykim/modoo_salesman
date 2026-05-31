@@ -8,6 +8,7 @@ import { useFontStore } from '@/store/useFontStore';
 import { createClient } from '@/lib/supabase-client';
 import { saveDesign } from '@/lib/designService';
 import { generateProductThumbnail } from '@/lib/thumbnailGenerator';
+import { calcPrintAddonFromCanvasState } from '@/lib/pricing';
 import type { ProductConfig, ProductColor } from '@/types/types';
 import type { SavedDesignRow } from '@/hooks/useSavedDesigns';
 
@@ -32,8 +33,9 @@ interface DesignEditorModalProps {
    * 저장 직전 호출. null 반환 시 저장 취소.
    * 반환된 title이 saveDesign과 onSaveComplete의 meta.title 양쪽에 사용됨.
    * price를 함께 받아 단체몰 진열가로 전달한다.
+   * ctx.printAddon: 현재 캔버스 디자인의 인쇄 추가가(원). 호출측이 base+addon을 기본 판매가로 제안하는 데 사용.
    */
-  onBeforeSave?: () => Promise<SaveMeta | null>;
+  onBeforeSave?: (ctx: { printAddon: number }) => Promise<SaveMeta | null>;
 }
 
 /**
@@ -159,10 +161,14 @@ export default function DesignEditorModal({
   const handleSave = async () => {
     if (!productConfig || saving) return;
 
+    // 인쇄 추가가는 현재 캔버스 상태에서 산정 → 호출측이 base+addon을 기본 판매가로 제안.
+    const canvasState = saveAllCanvasState();
+
     let resolvedTitle: string | undefined = undefined;
     let resolvedPrice: number | null | undefined = undefined;
     if (onBeforeSave) {
-      const decision = await onBeforeSave();
+      const printAddon = calcPrintAddonFromCanvasState(canvasState as Record<string, unknown>);
+      const decision = await onBeforeSave({ printAddon });
       if (decision === null) return; // 사용자가 취소
       resolvedTitle = decision.title;
       resolvedPrice = decision.price;
@@ -170,7 +176,6 @@ export default function DesignEditorModal({
 
     setSaving(true);
     try {
-      const canvasState = saveAllCanvasState();
       const primarySideId = productConfig.sides[0]?.id ?? 'front';
       const thumbnail = generateProductThumbnail(canvasMap, primarySideId, 400, 400);
       const customFonts = useFontStore.getState().customFonts;

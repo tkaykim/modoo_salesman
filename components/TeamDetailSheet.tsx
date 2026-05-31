@@ -1160,6 +1160,30 @@ function AssetThumb({
 function ShareLinkTab({ team }: { team: Team }) {
   const [copied, setCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+
+  // 담당자 이메일로 몰 링크 자동 발송 (Gmail SMTP)
+  const primaryEmail = team.contacts.find((c) => c.email)?.email ?? '';
+  const [emailInput, setEmailInput] = useState(primaryEmail);
+  const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const sendLinkEmail = async () => {
+    setEmailState('sending');
+    setEmailMsg(null);
+    try {
+      const res = await fetch(`/api/salesman/teams/${team.id}/send-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput.trim() || null }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || '발송 실패');
+      setEmailState('sent');
+      setEmailMsg(`${json?.data?.to ?? emailInput}로 발송했어요.`);
+    } catch (e) {
+      setEmailState('error');
+      setEmailMsg((e as Error).message);
+    }
+  };
   // 고객용 modoo_app 도메인 (production 고정)
   const customerAppBase = 'https://modoouniform.com';
 
@@ -1481,6 +1505,40 @@ function ShareLinkTab({ team }: { team: Team }) {
             <span aria-hidden>💬</span>
             카카오톡으로 보내기
           </button>
+
+          {/* 담당자 이메일로 자동 발송 */}
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-2">
+              <Icon name="send" size={16} color="var(--color-brand-500)" />
+              <p className="text-[12px] font-bold text-[var(--color-ink)]">담당자 이메일로 발송</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                inputMode="email"
+                value={emailInput}
+                onChange={(e) => { setEmailInput(e.target.value); setEmailState('idle'); }}
+                placeholder="담당자 이메일"
+                className="flex-1 min-w-0 rounded-[10px] border border-[var(--color-hairline)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand-500)]"
+              />
+              <button
+                type="button"
+                onClick={sendLinkEmail}
+                disabled={emailState === 'sending' || !emailInput.trim()}
+                className="rounded-[10px] bg-[var(--color-brand-500)] text-white text-[13px] font-bold px-3.5 py-2 active:bg-[var(--color-brand-600)] disabled:opacity-40 whitespace-nowrap"
+              >
+                {emailState === 'sending' ? '발송 중…' : emailState === 'sent' ? '✓ 발송됨' : '발송'}
+              </button>
+            </div>
+            {emailMsg && (
+              <p className={`text-[11px] mt-1.5 ${emailState === 'error' ? 'text-[var(--color-err)]' : 'text-[var(--color-pos)]'}`}>
+                {emailMsg}
+              </p>
+            )}
+            <p className="text-[10px] text-[var(--color-faint)] mt-1.5 leading-relaxed">
+              ⓘ 링크가 담당자 이메일로 자동 발송됩니다. (단체 정보의 담당자 이메일 기본 사용)
+            </p>
+          </Card>
 
           {shareError && (
             <p className="text-[11px] text-[var(--color-warn)] text-center">{shareError}</p>

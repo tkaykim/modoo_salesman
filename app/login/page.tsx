@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { Icon } from '@/components/ui';
@@ -94,6 +95,12 @@ function LoginForm() {
           className="bg-[var(--color-surface)] rounded-[20px] p-6 border border-[var(--color-hairline-soft)]"
           style={{ boxShadow: '0 4px 14px rgba(14,17,22,0.06)' }}
         >
+          {errorParam === 'pending' && (
+            <div className="rounded-[10px] bg-[var(--color-brand-500)]/10 border border-[var(--color-brand-500)]/30 px-3 py-2 text-[12px] text-[var(--color-brand-600)] mb-4 flex items-start gap-2">
+              <Icon name="alert" size={14} color="var(--color-brand-500)" />
+              <span className="flex-1">승인 대기 중입니다. 본사 운영팀의 승인 후 이용하실 수 있습니다.</span>
+            </div>
+          )}
           {(errorParam === 'role' || errorParam === 'not_salesman') && (
             <div className="rounded-[10px] bg-[var(--color-warn)]/10 border border-[var(--color-warn)]/30 px-3 py-2 text-[12px] text-[var(--color-warn)] mb-4 flex items-start gap-2">
               <Icon name="alert" size={14} color="var(--color-warn)" />
@@ -189,8 +196,11 @@ function LoginForm() {
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-[var(--color-faint)] mt-6">
-          영업사원 등록은 본사 운영팀 담당자에게 문의
+        <p className="text-center text-[12px] text-[var(--color-muted)] mt-6">
+          영업사원으로 활동하고 싶으신가요?{' '}
+          <Link href="/apply" className="font-bold text-[var(--color-brand-500)]">
+            지원 신청
+          </Link>
         </p>
       </div>
     </div>

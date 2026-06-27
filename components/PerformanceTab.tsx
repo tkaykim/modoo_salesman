@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Icon, Card, Section, HairLine, Chip } from '@/components/ui';
+import { Icon, Card, Section, HairLine } from '@/components/ui';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { useMyRevenue } from '@/hooks/useMyRevenue';
 import { useMySettlements, type SettlementRow } from '@/hooks/useMySettlements';
@@ -288,7 +288,7 @@ function GradeTable({ levels, currentLevel }: { levels: GradeLevelRow[]; current
     >
       <Card padding="none">
         <div className="px-4 py-2.5 flex justify-between text-[10px] font-bold text-[var(--color-muted)] uppercase tracking-wide bg-[var(--color-surface-alt)] rounded-t-[14px]">
-          <span className="w-14">등급</span>
+          <span className="w-24">등급</span>
           <span className="w-16 text-right">수수료</span>
           <span className="flex-1 text-right">월 매출 임계</span>
         </div>
@@ -299,9 +299,13 @@ function GradeTable({ levels, currentLevel }: { levels: GradeLevelRow[]; current
               key={lv.level}
               className={`flex items-center px-4 py-3 ${i > 0 ? 'border-t border-[var(--color-hairline-soft)]' : ''} ${isCurrent ? 'bg-[var(--color-brand-100)]' : ''}`}
             >
-              <span className={`w-14 text-[13px] font-mono font-bold ${isCurrent ? 'text-[var(--color-brand-700)]' : 'text-[var(--color-ink)]'}`}>
-                {lv.level.replace('LV', 'Lv.')}
-                {isCurrent && <span className="ml-1 text-[9px] bg-[var(--color-brand-500)] text-white px-1 py-0.5 rounded-full align-middle">현재</span>}
+              <span className={`w-24 min-w-0 flex items-center gap-1.5 text-[13px] font-mono font-bold ${isCurrent ? 'text-[var(--color-brand-700)]' : 'text-[var(--color-ink)]'}`}>
+                <span className="shrink-0">{lv.level.replace('LV', 'Lv.')}</span>
+                {isCurrent && (
+                  <span className="inline-flex h-4 shrink-0 items-center rounded-full bg-[var(--color-brand-500)] px-1.5 text-[9px] font-bold leading-none text-white">
+                    현재
+                  </span>
+                )}
               </span>
               <span className={`w-16 text-right text-[13px] font-bold num ${isCurrent ? 'text-[var(--color-brand-700)]' : 'text-[var(--color-ink)]'}`}>
                 {Math.round(lv.commission_rate * 100)}%

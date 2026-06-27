@@ -6,6 +6,7 @@ export interface ToolsTabProps {
   onOpenCalculator: () => void;
   onOpenCustomOrder: () => void;
   onOpenMyOrders: () => void;
+  onOpenAcademy: () => void;
 }
 
 interface ToolRow {
@@ -17,7 +18,7 @@ interface ToolRow {
   badge?: string;
 }
 
-export default function ToolsTab({ onOpenCalculator, onOpenCustomOrder, onOpenMyOrders }: ToolsTabProps) {
+export default function ToolsTab({ onOpenCalculator, onOpenCustomOrder, onOpenMyOrders, onOpenAcademy }: ToolsTabProps) {
   const primaryTools: ToolRow[] = [
     {
       icon: 'cart',
@@ -58,6 +59,22 @@ export default function ToolsTab({ onOpenCalculator, onOpenCustomOrder, onOpenMy
     },
   ];
 
+  const trainingTools: ToolRow[] = [
+    {
+      icon: 'trophy',
+      label: '파트너 스쿨',
+      desc: '교육 미션과 첫 주문 리워드',
+      onClick: onOpenAcademy,
+      badge: '신규',
+    },
+    {
+      icon: 'send',
+      label: '상담 스크립트',
+      desc: '첫 연락 문구와 단체몰 전달 순서',
+      onClick: onOpenAcademy,
+    },
+  ];
+
   return (
     <div className="bg-[var(--color-surface-alt)] min-h-full pt-4 pb-8">
       <div className="px-4 mb-4">
@@ -67,6 +84,7 @@ export default function ToolsTab({ onOpenCalculator, onOpenCustomOrder, onOpenMy
 
       <ToolGroup title="주문" rows={primaryTools} />
       <ToolGroup title="디자인" rows={designTools} />
+      <ToolGroup title="교육" rows={trainingTools} />
       <ToolGroup title="기록" rows={recordTools} />
     </div>
   );

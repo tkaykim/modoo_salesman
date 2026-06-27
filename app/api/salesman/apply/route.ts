@@ -11,6 +11,11 @@ interface ApplyBody {
   password?: string;
   display_name?: string;
   phone?: string;
+  region?: string;
+  community_type?: string;
+  reachable_groups?: string;
+  activity_time?: string;
+  intro?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,6 +33,11 @@ export async function POST(req: Request) {
   const password = body.password ?? '';
   const displayName = body.display_name?.trim();
   const phone = body.phone?.trim();
+  const region = body.region?.trim();
+  const communityType = body.community_type?.trim() || '미입력';
+  const reachableGroups = body.reachable_groups?.trim();
+  const activityTime = body.activity_time?.trim() || '미입력';
+  const intro = body.intro?.trim() || '';
 
   if (!email || !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: '유효한 이메일을 입력해주세요.' }, { status: 400 });
@@ -41,8 +51,31 @@ export async function POST(req: Request) {
   if (!phone || !PHONE_RE.test(phone)) {
     return NextResponse.json({ error: '유효한 연락처를 입력해주세요.' }, { status: 400 });
   }
+  if (!region || region.length < 2) {
+    return NextResponse.json({ error: '활동 지역을 입력해주세요.' }, { status: 400 });
+  }
+  if (!reachableGroups || reachableGroups.length < 1) {
+    return NextResponse.json({ error: '바로 연락 가능한 단체 수를 입력해주세요.' }, { status: 400 });
+  }
 
   const admin = createAdminClient();
+  const applicationMeta = {
+    region,
+    community_type: communityType,
+    reachable_groups: reachableGroups,
+    activity_time: activityTime,
+    intro,
+    applied_at: new Date().toISOString(),
+    source: 'modoo_partners_apply',
+  };
+  const note = [
+    '[모두 파트너스 지원서]',
+    `활동 지역: ${region}`,
+    `가까운 단체 유형: ${communityType}`,
+    `바로 연락 가능한 단체: ${reachableGroups}`,
+    `활동 가능 시간: ${activityTime}`,
+    intro ? `소개: ${intro}` : null,
+  ].filter(Boolean).join('\n');
 
   // 1) 이미 영업사원 프로필이 있는 이메일인지 (profiles 경유) 확인 — 중복 신청 차단
   const { data: existingProfile } = await admin
@@ -76,7 +109,7 @@ export async function POST(req: Request) {
     email,
     password,
     email_confirm: true,
-    user_metadata: { name: displayName, phone },
+    user_metadata: { name: displayName, phone, partner_application: applicationMeta },
   });
   if (createErr || !created?.user) {
     const dup = /already|registered|exist/i.test(createErr?.message ?? '');
@@ -102,6 +135,7 @@ export async function POST(req: Request) {
     status: 'pending',
     display_name: displayName,
     phone,
+    note,
   });
   if (insertErr) {
     await admin.auth.admin.deleteUser(userId).catch(() => {});

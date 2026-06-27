@@ -17,9 +17,10 @@ import OrgsTab from '@/components/OrgsTab';
 import ToolsTab from '@/components/ToolsTab';
 import PerformanceTab from '@/components/PerformanceTab';
 import ProfileTab from '@/components/ProfileTab';
+import AcademyTab from '@/components/AcademyTab';
 import type { TeamProductRow } from '@/hooks/useTeamProducts';
 
-type Tab = 'home' | 'earnings' | 'orgs' | 'tools' | 'profile';
+type Tab = 'home' | 'academy' | 'earnings' | 'orgs' | 'tools' | 'profile';
 type DetailTab = 'overview' | 'products' | 'orders' | 'assets' | 'shareLink';
 
 export default function MobileApp() {
@@ -68,6 +69,7 @@ export default function MobileApp() {
 
   const tabItems: TabItem<Tab>[] = [
     { id: 'home',     icon: 'home',   label: '홈' },
+    { id: 'academy',  icon: 'trophy', label: '스쿨' },
     { id: 'earnings', icon: 'wallet', label: '수입' },
     { id: 'orgs',     icon: 'group',  label: '단체', badge: reorderDue.length },
     { id: 'tools',    icon: 'grid',   label: '도구' },
@@ -139,11 +141,23 @@ export default function MobileApp() {
                 onOpenTemplates={() => openOrder(null)}
                 onOpenCoupons={() => setTab('profile')}
                 onOpenEarnings={() => setTab('earnings')}
+                onOpenAcademy={() => setTab('academy')}
                 onOpenOrg={(teamId) => {
                   setDetailInitialTab('overview');
                   setDetailTeamId(teamId);
                 }}
                 onNavigate={setTab}
+              />
+            )}
+            {tab === 'academy' && (
+              <AcademyTab
+                teams={teams}
+                totalRevenue={totalRevenue}
+                onStartVisit={() => setCreateTeamOpen(true)}
+                onOpenTeam={(teamId) => {
+                  setDetailInitialTab('overview');
+                  setDetailTeamId(teamId);
+                }}
               />
             )}
             {tab === 'earnings' && <PerformanceTab />}
@@ -163,6 +177,7 @@ export default function MobileApp() {
                 onOpenCalculator={() => setCalcOpen(true)}
                 onOpenCustomOrder={() => openOrder(null)}
                 onOpenMyOrders={() => setTab('profile')}
+                onOpenAcademy={() => setTab('academy')}
               />
             )}
             {tab === 'profile' && (
@@ -171,6 +186,7 @@ export default function MobileApp() {
                 thisMonthRevenue={thisMonthRevenue}
                 totalRevenue={totalRevenue}
                 couponCount={couponCount}
+                onOpenAcademy={() => setTab('academy')}
               />
             )}
           </NavSpacer>

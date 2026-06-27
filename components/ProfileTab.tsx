@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Icon, type IconName, TintedSection, Chip } from '@/components/ui';
+import { Icon, type IconName, TintedSection } from '@/components/ui';
 import MyOrdersSheet from '@/components/MyOrdersSheet';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { ALL_GRADES, type GradeInfo } from '@/lib/grades';
@@ -12,13 +12,13 @@ export interface ProfileTabProps {
   thisMonthRevenue: number;
   totalRevenue: number;
   couponCount: number;
+  onOpenAcademy: () => void;
 }
 
-export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, couponCount }: ProfileTabProps) {
+export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, couponCount, onOpenAcademy }: ProfileTabProps) {
   const router = useRouter();
   const { logout, user } = useSalesmanStore();
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
-  const [eduFilter, setEduFilter] = useState<'all' | 'must' | 'product' | 'sales' | 'ops'>('all');
 
   const handleLogout = async () => {
     await logout();
@@ -176,46 +176,32 @@ export default function ProfileTab({ grade, thisMonthRevenue, totalRevenue, coup
         </div>
       </TintedSection>
 
-      {/* Education materials — placeholder */}
-      <TintedSection title="교육 자료" right="전체 보기">
-        <div className="px-3 pt-3 flex gap-1.5 overflow-x-auto pb-2">
-          <Chip active={eduFilter === 'all'}     onClick={() => setEduFilter('all')}>전체</Chip>
-          <Chip active={eduFilter === 'must'}    onClick={() => setEduFilter('must')}>필수</Chip>
-          <Chip active={eduFilter === 'product'} onClick={() => setEduFilter('product')}>제품</Chip>
-          <Chip active={eduFilter === 'sales'}   onClick={() => setEduFilter('sales')}>협상</Chip>
-          <Chip active={eduFilter === 'ops'}     onClick={() => setEduFilter('ops')}>운영</Chip>
-        </div>
-        <div className="px-2 pb-3">
-          {EDU_PLACEHOLDERS.map((e, i) => (
-            <button
-              key={e.id}
-              className="w-full flex items-center gap-3 px-2 py-3 text-left rounded-[10px] active:bg-white"
-              style={{ borderTop: i > 0 ? '1px solid rgba(0,0,0,0.04)' : 'none' }}
-            >
+      {/* Education entry */}
+      <TintedSection title="교육 자료" right="파트너 스쿨">
+        <div className="px-3 py-3">
+          <button
+            type="button"
+            onClick={onOpenAcademy}
+            className="w-full rounded-[14px] bg-white border border-[var(--color-hairline-soft)] p-3.5 text-left active:bg-[var(--color-surface-alt)]"
+          >
+            <div className="flex items-center gap-3">
               <div
-                className="w-12 h-12 rounded-[10px] flex items-center justify-center flex-shrink-0"
-                style={{ background: e.kind === 'video' ? 'var(--color-ink)' : 'var(--color-hairline)' }}
+                className="w-12 h-12 rounded-[12px] flex items-center justify-center flex-shrink-0"
+                style={{ background: 'var(--color-brand-100)' }}
               >
-                <Icon
-                  name={e.kind === 'video' ? 'sparkle' : 'info'}
-                  size={18}
-                  color={e.kind === 'video' ? '#fff' : 'var(--color-muted)'}
-                />
+                <Icon name="trophy" size={20} color="var(--color-brand-500)" strokeWidth={2.2} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-bold text-[var(--color-muted)] mb-0.5">
-                  {e.category}
+                <div className="text-[13px] font-extrabold text-[var(--color-ink)] tracking-tight">
+                  파트너 스쿨에서 이어보기
                 </div>
-                <div className="text-[13px] font-bold text-[var(--color-ink)] tracking-tight truncate">
-                  {e.title}
+                <div className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-1">
+                  교육 영상, 상담 스크립트, 실전 미션을 한곳에서 진행합니다.
                 </div>
-                <div className="text-[11px] text-[var(--color-faint)] mt-0.5">{e.meta}</div>
               </div>
-            </button>
-          ))}
-          <div className="text-center text-[11px] text-[var(--color-faint)] py-2">
-            콘텐츠 준비중
-          </div>
+              <Icon name="chevron-r" size={17} color="var(--color-faint)" />
+            </div>
+          </button>
         </div>
       </TintedSection>
 
@@ -293,12 +279,6 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-const EDU_PLACEHOLDERS = [
-  { id: 'e1', kind: 'video' as const, category: '필수',     title: '영업사원 시작하기 (오리엔테이션)', meta: '영상 · 12분' },
-  { id: 'e2', kind: 'doc'   as const, category: '제품',     title: '단체복 원단 가이드',                 meta: '문서 · 8쪽' },
-  { id: 'e3', kind: 'video' as const, category: '협상',     title: '재주문 사이클 응대 스크립트',       meta: '영상 · 7분' },
-];
 
 const FAQS = [
   { id: 'q1', q: '쿠폰은 어떤 단체에 사용할 수 있나요?' },

@@ -30,8 +30,9 @@ export interface HomeTabProps {
   onOpenTemplates: () => void;
   onOpenCoupons: () => void;
   onOpenEarnings: () => void;
+  onOpenAcademy: () => void;
   onOpenOrg: (teamId: string) => void;
-  onNavigate: (t: 'home' | 'earnings' | 'orgs' | 'tools' | 'profile') => void;
+  onNavigate: (t: 'home' | 'academy' | 'earnings' | 'orgs' | 'tools' | 'profile') => void;
 }
 
 export default function HomeTab({
@@ -49,6 +50,7 @@ export default function HomeTab({
   onOpenTemplates,
   onOpenCoupons,
   onOpenEarnings,
+  onOpenAcademy,
   onOpenOrg,
   onNavigate,
 }: HomeTabProps) {
@@ -132,6 +134,30 @@ export default function HomeTab({
             { icon: 'tag',     label: '쿠폰',      tint: 'gold',    badge: couponCount, onClick: onOpenCoupons },
           ]}
         />
+      </div>
+
+      <div className="px-3 mt-3">
+        <button
+          onClick={onOpenAcademy}
+          className="w-full bg-white rounded-[16px] px-4 py-3.5 flex items-center gap-3 text-left active:bg-[var(--color-surface-alt)]"
+          style={{ boxShadow: 'var(--shadow-card-flat)', border: '1px solid var(--color-hairline-soft)' }}
+        >
+          <div
+            className="w-11 h-11 rounded-[14px] flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--color-gold-soft)' }}
+          >
+            <Icon name="trophy" size={22} color="var(--color-gold-deep)" strokeWidth={2} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-extrabold text-[var(--color-ink)] tracking-tight">
+              파트너 스쿨 미션 시작
+            </div>
+            <div className="text-[11px] text-[var(--color-muted)] mt-0.5">
+              교육 보고 첫 단체몰 리워드까지 확인
+            </div>
+          </div>
+          <Icon name="chevron-r" size={16} color="var(--color-faint)" />
+        </button>
       </div>
 
       {/* Reorder timing — warning tint, 실데이터 */}

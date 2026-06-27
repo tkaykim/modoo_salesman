@@ -8,7 +8,7 @@ import { useFontStore } from '@/store/useFontStore';
 import { createClient } from '@/lib/supabase-client';
 import { saveDesign } from '@/lib/designService';
 import { generateProductThumbnail } from '@/lib/thumbnailGenerator';
-import { calcPrintAddonFromCanvasState } from '@/lib/pricing';
+import { calculateAllSidesPricing } from '@/app/utils/canvasPricing';
 import type { ProductConfig, ProductColor } from '@/types/types';
 import type { SavedDesignRow } from '@/hooks/useSavedDesigns';
 
@@ -27,6 +27,7 @@ interface SaveMeta {
 interface DesignEditorModalProps {
   productId: string;
   initialColor?: string;
+  teamLogos?: Array<{ url: string; name?: string | null }>;
   onSaveComplete: (design: SavedDesignRow, meta?: SaveMeta) => void;
   onClose: () => void;
   /**
@@ -35,7 +36,7 @@ interface DesignEditorModalProps {
    * price를 함께 받아 단체몰 진열가로 전달한다.
    * ctx.printAddon: 현재 캔버스 디자인의 인쇄 추가가(원). 호출측이 base+addon을 기본 판매가로 제안하는 데 사용.
    */
-  onBeforeSave?: (ctx: { printAddon: number }) => Promise<SaveMeta | null>;
+  onBeforeSave?: (ctx: { printAddon: number; pricePerItem: number }) => Promise<SaveMeta | null>;
 }
 
 /**
@@ -49,11 +50,13 @@ interface DesignEditorModalProps {
 export default function DesignEditorModal({
   productId,
   initialColor,
+  teamLogos = [],
   onSaveComplete,
   onClose,
   onBeforeSave,
 }: DesignEditorModalProps) {
   const [productConfig, setProductConfig] = useState<ProductConfig | null>(null);
+  const [productBasePrice, setProductBasePrice] = useState(0);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,7 +88,7 @@ export default function DesignEditorModal({
         const [productResult, colorsResult] = await Promise.all([
           supabase
             .from('products')
-            .select('id, configuration')
+            .select('id, configuration, base_price')
             .eq('id', productId)
             .single(),
           supabase
@@ -101,12 +104,18 @@ export default function DesignEditorModal({
           throw productResult.error ?? new Error('Product not found');
         }
 
+        const rawConfiguration = productResult.data.configuration as unknown;
+        const sides: ProductConfig['sides'] = Array.isArray(rawConfiguration)
+          ? (rawConfiguration as ProductConfig['sides'])
+          : [];
+
         const config: ProductConfig = {
           productId: productResult.data.id,
-          sides: (productResult.data.configuration as any) ?? [],
+          sides,
         };
 
         setProductConfig(config);
+        setProductBasePrice(Math.max(0, Math.round(Number(productResult.data.base_price) || 0)));
 
         if (config.sides.length > 0) {
           setActiveSide(config.sides[0].id);
@@ -161,17 +170,30 @@ export default function DesignEditorModal({
   const handleSave = async () => {
     if (!productConfig || saving) return;
 
-    // 인쇄 추가가는 현재 캔버스 상태에서 산정 → 호출측이 base+addon을 기본 판매가로 제안.
+    let printAddon = 0;
+    try {
+      const pricingSummary = await calculateAllSidesPricing(canvasMap, productConfig.sides);
+      printAddon = Math.max(0, Math.round(pricingSummary.totalAdditionalPrice || 0));
+    } catch (error) {
+      console.warn('[DesignEditorModal] pricing calculation failed, falling back to base price', error);
+    }
+    const pricePerItem = productBasePrice + printAddon;
     const canvasState = saveAllCanvasState();
 
     let resolvedTitle: string | undefined = undefined;
     let resolvedPrice: number | null | undefined = undefined;
+    let finalPricePerItem = pricePerItem;
     if (onBeforeSave) {
-      const printAddon = calcPrintAddonFromCanvasState(canvasState as Record<string, unknown>);
-      const decision = await onBeforeSave({ printAddon });
+      const decision = await onBeforeSave({ printAddon, pricePerItem });
       if (decision === null) return; // 사용자가 취소
       resolvedTitle = decision.title;
       resolvedPrice = decision.price;
+      if (resolvedPrice !== null && resolvedPrice !== undefined) {
+        const parsedPrice = Number(resolvedPrice);
+        if (Number.isFinite(parsedPrice) && parsedPrice >= 0) {
+          finalPricePerItem = Math.round(parsedPrice);
+        }
+      }
     }
 
     setSaving(true);
@@ -186,7 +208,7 @@ export default function DesignEditorModal({
         productColor: productColor ?? '#FFFFFF',
         canvasState,
         previewImage: thumbnail || undefined,
-        pricePerItem: 0,
+        pricePerItem: finalPricePerItem,
         customFonts,
       });
 
@@ -200,7 +222,7 @@ export default function DesignEditorModal({
         user_id: result.user_id,
         title: result.title,
         preview_url: result.preview_url,
-        price_per_item: null,
+        price_per_item: finalPricePerItem,
         created_at: result.created_at,
         updated_at: result.updated_at,
       };
@@ -279,6 +301,7 @@ export default function DesignEditorModal({
             onColorPress={hasColorOptions ? () => setColorPickerOpen(true) : undefined}
             displayColor={selectedColorHex}
             hasColorOptions={hasColorOptions}
+            teamLogos={teamLogos}
           />
         ) : null}
       </div>

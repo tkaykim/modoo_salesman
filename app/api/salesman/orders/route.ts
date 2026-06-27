@@ -266,7 +266,7 @@ export async function POST(request: Request) {
   const paymentMethod =
     body.paymentType === 'bank_transfer' ? 'bank_transfer'
     : body.paymentType === 'customer_payment' ? 'toss'
-    : 'manual';
+    : 'admin';
 
   // 5) order rows 빌드
   const orderJson: Record<string, unknown> = {

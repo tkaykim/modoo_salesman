@@ -18,9 +18,10 @@ interface ProductDesignerProps {
   onColorPress?: () => void;
   displayColor?: string;
   hasColorOptions?: boolean;
+  teamLogos?: Array<{ url: string; name?: string | null }>;
 }
 
-const ProductDesigner: React.FC<ProductDesignerProps> = ({ config, layout = 'mobile', onExitEditMode, onColorPress, displayColor, hasColorOptions }) => {
+const ProductDesigner: React.FC<ProductDesignerProps> = ({ config, layout = 'mobile', onExitEditMode, onColorPress, displayColor, hasColorOptions, teamLogos = [] }) => {
   const { isEditMode, setEditMode, setActiveSide, activeSideId, canvasMap } = useCanvasStore();
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -201,6 +202,7 @@ const ProductDesigner: React.FC<ProductDesignerProps> = ({ config, layout = 'mob
           onColorPress={onColorPress}
           displayColor={displayColor}
           hasColorOptions={hasColorOptions}
+          teamLogos={teamLogos}
         />
       )}
     </div>

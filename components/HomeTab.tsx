@@ -25,6 +25,7 @@ export interface HomeTabProps {
   reorderDue: Team[];
   couponCount: number;
   onCreateOrder: () => void;
+  onStartVisit: () => void;
   onOpenCalculator: () => void;
   onOpenTemplates: () => void;
   onOpenCoupons: () => void;
@@ -43,6 +44,7 @@ export default function HomeTab({
   reorderDue,
   couponCount,
   onCreateOrder,
+  onStartVisit,
   onOpenCalculator,
   onOpenTemplates,
   onOpenCoupons,
@@ -79,6 +81,25 @@ export default function HomeTab({
         ]}
         onDetail={onOpenEarnings}
       />
+
+      <div className="px-3 mt-3">
+        <button
+          onClick={onStartVisit}
+          className="w-full rounded-[18px] bg-[var(--color-ink)] px-4 py-4 text-left text-white active:opacity-90"
+          style={{ boxShadow: 'var(--shadow-cta)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-[14px] bg-white/10 flex items-center justify-center flex-shrink-0">
+              <Icon name="briefcase" size={22} color="white" strokeWidth={2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-extrabold tracking-tight">새 매장 상담 시작</div>
+              <div className="text-[11px] text-white/70 mt-0.5">등록하고 바로 제품 시안을 만들어요</div>
+            </div>
+            <Icon name="chevron-r" size={18} color="rgba(255,255,255,0.75)" strokeWidth={2.2} />
+          </div>
+        </button>
+      </div>
 
       {/* 미결제 대기 — 결제되면 수수료로 전환 */}
       {thisMonthPendingRevenue > 0 && (

@@ -20,11 +20,14 @@ import ProfileTab from '@/components/ProfileTab';
 import type { TeamProductRow } from '@/hooks/useTeamProducts';
 
 type Tab = 'home' | 'earnings' | 'orgs' | 'tools' | 'profile';
+type DetailTab = 'overview' | 'products' | 'orders' | 'assets' | 'shareLink';
 
 export default function MobileApp() {
   const [tab, setTab] = useState<Tab>('home');
   const [lastCreatedOrderId, setLastCreatedOrderId] = useState<string | null>(null);
   const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
+  const [detailInitialTab, setDetailInitialTab] = useState<DetailTab>('overview');
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
   const [orderV2, setOrderV2] = useState<{
@@ -131,11 +134,15 @@ export default function MobileApp() {
                 reorderDue={reorderDue}
                 couponCount={couponCount}
                 onCreateOrder={() => openOrder(null)}
+                onStartVisit={() => setCreateTeamOpen(true)}
                 onOpenCalculator={() => setCalcOpen(true)}
                 onOpenTemplates={() => openOrder(null)}
                 onOpenCoupons={() => setTab('profile')}
                 onOpenEarnings={() => setTab('earnings')}
-                onOpenOrg={(teamId) => setDetailTeamId(teamId)}
+                onOpenOrg={(teamId) => {
+                  setDetailInitialTab('overview');
+                  setDetailTeamId(teamId);
+                }}
                 onNavigate={setTab}
               />
             )}
@@ -144,7 +151,10 @@ export default function MobileApp() {
               <OrgsTab
                 teams={teams}
                 onCreateOrderForTeam={(teamId) => openOrder(teamId)}
-                onOpenDetail={(teamId) => setDetailTeamId(teamId)}
+                onOpenDetail={(teamId) => {
+                  setDetailInitialTab('overview');
+                  setDetailTeamId(teamId);
+                }}
                 onTeamMutate={refetchTeams}
               />
             )}
@@ -170,8 +180,10 @@ export default function MobileApp() {
         <TabBar<Tab> active={tab} onChange={setTab} items={tabItems} />
 
         <TeamDetailSheet
+          key={`${detailTeamId ?? 'none'}-${detailInitialTab}`}
           open={!!detailTeamId}
           teamId={detailTeamId}
+          initialTab={detailInitialTab}
           onClose={() => setDetailTeamId(null)}
           onCreateOrder={(teamId, selectedProducts) => {
             setDetailTeamId(null);
@@ -194,6 +206,21 @@ export default function MobileApp() {
           onCreated={() => {
             refetchTeams();
             setEditTeamId(null);
+          }}
+        />
+
+        <CreateTeamSheet
+          open={createTeamOpen}
+          onClose={() => setCreateTeamOpen(false)}
+          onCreated={async (teamId) => {
+            await refetchTeams();
+            setCreateTeamOpen(false);
+            if (teamId) {
+              setDetailInitialTab('products');
+              setDetailTeamId(teamId);
+            } else {
+              setTab('orgs');
+            }
           }}
         />
 

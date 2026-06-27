@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useProducts, matchProduct, type ProductRow } from '@/hooks/useProducts';
-import { calcPrintAddonFromCanvasState } from '@/lib/pricing';
+import { calculatePricePerItemFromCanvasState } from '@/lib/customerPriceFromCanvasState';
 import { useSavedDesigns, type SavedDesignRow } from '@/hooks/useSavedDesigns';
 import DesignEditorModal from '@/components/DesignEditorModal';
 import { Card, Icon } from '@/components/ui';
@@ -14,6 +14,8 @@ interface Props {
   teamId: string | null;
   /** 단체(파트너몰) 이름 — 디자인 제목 default 생성에 사용 */
   mallName?: string | null;
+  /** 단체에 등록된 로고 — 새 디자인 에디터에서 바로 배치할 수 있게 전달 */
+  teamLogos?: Array<{ url: string; name?: string | null }>;
   onClose: () => void;
   onCreated?: () => void;
 }
@@ -21,11 +23,44 @@ interface Props {
 type Step = 'choice' | 'product-pick' | 'design-pick';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
+const RECOMMENDED_PRODUCT_RULES = [
+  { label: '기본 티셔츠', terms: ['베이직', '라운드', '티셔츠', '00085', 'cvt'] },
+  { label: '매장 유니폼', terms: ['폴로', '카라', '셔츠', '드라이'] },
+  { label: '행사 스태프', terms: ['드라이', '라운드', '쿨', '기능성'] },
+  { label: '후드·맨투맨', terms: ['후드', '맨투맨', '스웨트'] },
+];
+
+const productText = (p: ProductRow) =>
+  [
+    p.title,
+    p.manufacturer_name,
+    p.product_code,
+    p.category,
+    ...(p.keywords ?? []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+const recommendationFor = (p: ProductRow) => {
+  const text = productText(p);
+  let best: { label: string; score: number } | null = null;
+  for (const rule of RECOMMENDED_PRODUCT_RULES) {
+    const score = rule.terms.reduce((sum, term) => (
+      text.includes(term.toLowerCase()) ? sum + 1 : sum
+    ), 0);
+    if (score > 0 && (!best || score > best.score)) {
+      best = { label: rule.label, score };
+    }
+  }
+  return best;
+};
 
 export default function AddTeamProductFlow({
   open,
   teamId,
   mallName,
+  teamLogos = [],
   onClose,
   onCreated,
 }: Props) {
@@ -55,7 +90,7 @@ export default function AddTeamProductFlow({
     [products, productSearch],
   );
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setStep('choice');
     setProductSearch('');
     setEditingProduct(null);
@@ -66,11 +101,13 @@ export default function AddTeamProductFlow({
     setPriceInput('');
     setTitleSavedName(null);
     setSavedPrice(null);
-  };
+  }, []);
 
   useEffect(() => {
-    if (!open) reset();
-  }, [open]);
+    if (open) return;
+    const timer = window.setTimeout(reset, 0);
+    return () => window.clearTimeout(timer);
+  }, [open, reset]);
 
   const buildDefaultTitle = (product: ProductRow | null) => {
     const mall = (mallName ?? '').trim();
@@ -79,12 +116,12 @@ export default function AddTeamProductFlow({
   };
 
   // DesignEditorModal에서 저장 직전에 호출 — 제목·가격 모달 띄우고 응답 대기.
-  // ctx.printAddon: 현재 디자인 인쇄 추가가 → 기본 판매가 = base_price + printAddon 제안.
-  const promptForTitle = (ctx: { printAddon: number }): Promise<SaveMeta | null> => {
+  // ctx.pricePerItem: modoo_app 정본 방식의 제품 기본가 + 고객 단가표 기반 인쇄 추가가.
+  const promptForTitle = (ctx: { printAddon: number; pricePerItem?: number }): Promise<SaveMeta | null> => {
     return new Promise((resolve) => {
       const defaultValue = buildDefaultTitle(editingProduct);
       const base = Math.round(Number(editingProduct?.base_price) || 0);
-      const suggested = base + Math.max(0, Math.round(ctx?.printAddon || 0));
+      const suggested = Math.round(Number(ctx?.pricePerItem) || 0) || base + Math.max(0, Math.round(ctx?.printAddon || 0));
       setTitleInput(defaultValue);
       setPriceInput(suggested > 0 ? String(suggested) : '');
       setTitlePrompt({ defaultValue, resolve });
@@ -197,14 +234,13 @@ export default function AddTeamProductFlow({
           .eq('id', d.id)
           .maybeSingle();
         const canvasState = (full?.canvas_state as Record<string, unknown> | null) ?? {};
-        // 판매가 항상 확정: 저장된 단가 우선, 없으면 base + 인쇄가, 그것도 없으면 base.
+        // 판매가 항상 확정: 저장된 정본 단가 우선, 없으면 modoo_app 방식으로 복구.
         const prod = products.find((p) => p.id === d.product_id);
         const base = Math.round(Number(prod?.base_price) || 0);
-        const addon = calcPrintAddonFromCanvasState(canvasState);
         const price =
           d.price_per_item && d.price_per_item > 0
             ? Math.round(d.price_per_item)
-            : base + addon;
+            : await calculatePricePerItemFromCanvasState(canvasState, base);
         await placeOne({
           productId: d.product_id!,
           displayName: d.title ?? buildDefaultTitle(null) ?? '디자인',
@@ -230,6 +266,7 @@ export default function AddTeamProductFlow({
       <>
         <DesignEditorModal
           productId={editingProduct.id}
+          teamLogos={teamLogos}
           onClose={() => setEditingProduct(null)}
           onSaveComplete={handleNewDesignSaved}
           onBeforeSave={promptForTitle}
@@ -418,6 +455,27 @@ function ProductPicker({
   onPick: (p: ProductRow) => void;
   isLoading: boolean;
 }) {
+  const showRecommendations = search.trim().length === 0;
+  const recommendedProducts = useMemo(() => {
+    if (!showRecommendations) return [];
+    const ranked = products
+      .map((product) => ({ product, recommendation: recommendationFor(product) }))
+      .filter((item): item is { product: ProductRow; recommendation: { label: string; score: number } } => !!item.recommendation)
+      .sort((a, b) => {
+        if (b.recommendation.score !== a.recommendation.score) {
+          return b.recommendation.score - a.recommendation.score;
+        }
+        return (Number(a.product.base_price) || 0) - (Number(b.product.base_price) || 0);
+      })
+      .slice(0, 6);
+    return ranked.length > 0
+      ? ranked
+      : products.slice(0, 6).map((product) => ({
+          product,
+          recommendation: { label: '빠른 시작', score: 0 },
+        }));
+  }, [products, showRecommendations]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-2 border-b border-[var(--color-hairline-soft)]">
@@ -442,7 +500,53 @@ function ProductPicker({
         ) : products.length === 0 ? (
           <div className="p-8 text-center text-[12px] text-[var(--color-muted)]">검색 결과 없음</div>
         ) : (
-          <div className="divide-y divide-[var(--color-hairline-soft)]">
+          <div>
+            {recommendedProducts.length > 0 && (
+              <section className="border-b border-[var(--color-hairline-soft)] px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-[12px] font-extrabold text-[var(--color-ink)]">현장 추천</h3>
+                  <span className="text-[10px] text-[var(--color-muted)]">바로 시안 만들기</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {recommendedProducts.map(({ product: p, recommendation }) => (
+                    <button
+                      key={p.id}
+                      onClick={() => onPick(p)}
+                      className="min-w-[166px] max-w-[166px] rounded-[14px] border border-[var(--color-hairline)] bg-white p-2 text-left active:bg-[var(--color-surface-alt)]"
+                    >
+                      <div className="h-[92px] rounded-[10px] bg-[var(--color-surface-alt)] overflow-hidden flex items-center justify-center">
+                        {p.thumbnail_image_link?.[0] ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={p.thumbnail_image_link[0]}
+                            alt={p.title}
+                            className="w-full h-full object-contain p-1"
+                          />
+                        ) : (
+                          <Icon name="package" size={24} color="var(--color-faint)" />
+                        )}
+                      </div>
+                      <div className="mt-2 flex items-center gap-1">
+                        <span className="rounded-full bg-[var(--color-brand-100)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-brand-700)]">
+                          {recommendation.label}
+                        </span>
+                        <span className="text-[10px] font-mono text-[var(--color-muted)]">
+                          {fmt(Number(p.base_price) || 0)}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-[32px] text-[11px] font-bold leading-[16px] text-[var(--color-ink)] line-clamp-2">
+                        {p.title}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <div className="px-4 pt-3 pb-1 text-[11px] font-bold text-[var(--color-muted)]">
+              전체 제품
+            </div>
+            <div className="divide-y divide-[var(--color-hairline-soft)]">
             {products.map((p) => (
               <button
                 key={p.id}
@@ -487,6 +591,7 @@ function ProductPicker({
                 </span>
               </button>
             ))}
+            </div>
           </div>
         )}
       </div>

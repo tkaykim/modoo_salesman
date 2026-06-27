@@ -16,7 +16,7 @@ import { Icon, Chip, Card, Section } from '@/components/ui';
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (teamId?: string) => void | Promise<void>;
   /** Edit mode — partner_mall id */
   editTeamId?: string | null;
 }
@@ -93,16 +93,19 @@ export default function CreateTeamSheet({ open, onClose, onCreated, editTeamId }
   useEffect(() => {
     if (open) return;
     if (isEdit) return;
-    setName('');
-    setCategory('학교');
-    setSize('');
-    setReorderCycleMonths(6);
-    setNote('');
-    setPostalCode('');
-    setRoadAddress('');
-    setDetailAddress('');
-    setContacts([{ name: '', role: '결정권자', phone: '', email: '', isPrimary: true }]);
-    setError(null);
+    const timer = window.setTimeout(() => {
+      setName('');
+      setCategory('학교');
+      setSize('');
+      setReorderCycleMonths(6);
+      setNote('');
+      setPostalCode('');
+      setRoadAddress('');
+      setDetailAddress('');
+      setContacts([{ name: '', role: '결정권자', phone: '', email: '', isPrimary: true }]);
+      setError(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, isEdit]);
 
   const handleClose = () => {
@@ -176,22 +179,27 @@ export default function CreateTeamSheet({ open, onClose, onCreated, editTeamId }
           .update({ name: name.trim(), team_meta: meta as unknown as Record<string, unknown> })
           .eq('id', editTeamId);
         if (updErr) throw updErr;
+        await onCreated(editTeamId);
       } else {
         const shareToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
           .map((b) => b.toString(16).padStart(2, '0'))
           .join('');
-        const { error: insErr } = await supabase.from('partner_malls').insert({
-          name: name.trim(),
-          logo_url: '',
-          is_active: true,
-          share_token: shareToken,
-          salesman_id: user.salesman_profile_id,
-          team_meta: meta as unknown as Record<string, unknown>,
-        });
+        const { data: inserted, error: insErr } = await supabase
+          .from('partner_malls')
+          .insert({
+            name: name.trim(),
+            logo_url: '',
+            is_active: true,
+            share_token: shareToken,
+            salesman_id: user.salesman_profile_id,
+            team_meta: meta as unknown as Record<string, unknown>,
+          })
+          .select('id')
+          .single();
         if (insErr) throw insErr;
+        await onCreated(inserted?.id);
       }
 
-      onCreated();
       onClose();
     } catch (err) {
       console.error('[CreateTeamSheet] submit error:', err);
@@ -376,7 +384,7 @@ export default function CreateTeamSheet({ open, onClose, onCreated, editTeamId }
 
               {!isEdit && (
                 <p className="text-[10px] text-[var(--color-faint)] leading-relaxed pt-1">
-                  ⓘ 등록 후 단체 상세에서 로고/제품 라인업 셋업 → 공유 링크 활성화 가능
+                  ⓘ 등록하면 바로 단체 상세로 이동해 제품 라인업과 공유 링크를 세팅합니다
                 </p>
               )}
             </>

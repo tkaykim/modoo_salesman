@@ -10,12 +10,14 @@ import AddTeamProductFlow from '@/components/AddTeamProductFlow';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
 import { CATEGORY_COLORS, formatAddress, type Team } from '@/lib/teams';
 import { Icon, Card, Section, HairLine, CTA, Chip } from '@/components/ui';
+import { buildPaymentLinkUrl, paymentLinkExpiry, paymentLinkMessage } from '@/lib/paymentLink';
 
 const fmt = (n: number) => `₩${Math.round(n).toLocaleString('ko-KR')}`;
 
 interface Props {
   open: boolean;
   teamId: string | null;
+  initialTab?: DetailTab;
   onClose: () => void;
   /**
    * 진열 기반 주문 생성 — 선택한 partner_mall_products로 V2를 prefill해 진입.
@@ -27,8 +29,9 @@ interface Props {
 
 type DetailTab = 'overview' | 'products' | 'orders' | 'assets' | 'shareLink';
 
-export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, onEdit }: Props) {
-  const [tab, setTab] = useState<DetailTab>('overview');
+export default function TeamDetailSheet({ open, teamId, initialTab = 'overview', onClose, onCreateOrder, onEdit }: Props) {
+  const [tab, setTab] = useState<DetailTab>(initialTab);
+  const [shareReadyNotice, setShareReadyNotice] = useState(false);
 
   const { team, isLoading, mutate: refetchTeam } = useTeam(open ? teamId : null);
   const { orders, totalRevenue, isLoading: ordersLoading } = useTeamOrders(open ? teamId : null);
@@ -95,13 +98,18 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
                   products={products}
                   productsLoading={productsLoading}
                   onAddProduct={() => setAddProductOpen(true)}
+                  onOpenAssets={() => setTab('assets')}
+                  onOpenShare={() => setTab('shareLink')}
+                  onEditTeam={() => onEdit(team.id)}
                 />
               )}
               {tab === 'products' && (
                 <ProductsTab
                   products={products}
                   loading={productsLoading}
+                  logoCount={logos.length}
                   onAdd={() => setAddProductOpen(true)}
+                  onOpenAssets={() => setTab('assets')}
                   onOrderSingle={(p) => onCreateOrder(team.id, [p])}
                   onOrderMulti={(picked) => onCreateOrder(team.id, picked)}
                   onMutate={refetchProducts}
@@ -118,7 +126,7 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
                   onMutate={async () => { await refetchAssets(); await refetchTeam(); }}
                 />
               )}
-              {tab === 'shareLink' && <ShareLinkTab team={team} />}
+              {tab === 'shareLink' && <ShareLinkTab team={team} productJustAdded={shareReadyNotice} />}
             </>
           )}
         </div>
@@ -135,11 +143,18 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
               </a>
             )}
             <button
-              onClick={() => onCreateOrder(team.id)}
+              onClick={() => {
+                if (products.length === 0) {
+                  setAddProductOpen(true);
+                  return;
+                }
+                onCreateOrder(team.id);
+              }}
               className="flex-[1.5] bg-[var(--color-brand-500)] text-white py-3 rounded-[14px] text-[13px] font-bold flex items-center justify-center gap-1 active:bg-[var(--color-brand-600)]"
               style={{ boxShadow: 'var(--shadow-cta)' }}
             >
-              <Icon name="cart" size={16} color="white" /> 주문 생성
+              <Icon name={products.length === 0 ? 'plus' : 'cart'} size={16} color="white" />
+              {products.length === 0 ? '제품 먼저 만들기' : '주문 생성'}
             </button>
           </div>
         )}
@@ -149,10 +164,13 @@ export default function TeamDetailSheet({ open, teamId, onClose, onCreateOrder, 
         open={addProductOpen}
         teamId={teamId}
         mallName={team?.name ?? null}
+        teamLogos={logos.map((logo) => ({ url: logo.url, name: logo.name }))}
         onClose={() => setAddProductOpen(false)}
         onCreated={async () => {
           await refetchProducts();
           await refetchTeam();
+          setShareReadyNotice(true);
+          setTab('shareLink');
         }}
       />
     </div>
@@ -172,6 +190,9 @@ function OverviewTab({
   products,
   productsLoading,
   onAddProduct,
+  onOpenAssets,
+  onOpenShare,
+  onEditTeam,
 }: {
   team: Team;
   totalRevenue: number;
@@ -182,6 +203,9 @@ function OverviewTab({
   products: TeamProductRow[];
   productsLoading: boolean;
   onAddProduct: () => void;
+  onOpenAssets: () => void;
+  onOpenShare: () => void;
+  onEditTeam: () => void;
 }) {
   const addressLine = formatAddress(team.address);
   const cycleMonths = team.reorderCycleMonths;
@@ -234,6 +258,17 @@ function OverviewTab({
           accent={team.status === 'reorder_due' ? 'var(--color-warn)' : undefined}
         />
       </div>
+
+      <VisitReadinessCard
+        team={team}
+        logoCount={logoCount}
+        productCount={products.length}
+        productsLoading={productsLoading}
+        onAddProduct={onAddProduct}
+        onOpenAssets={onOpenAssets}
+        onOpenShare={onOpenShare}
+        onEditTeam={onEditTeam}
+      />
 
       {/* 재주문 타이밍 — 주문이력 기반 자동주기 + 수동 override 안내 */}
       {team.nextReorderDays !== null && (
@@ -342,7 +377,17 @@ function OverviewTab({
       </Section>
 
       {/* Registered products preview */}
-      <Section title={`등록된 제품 (${products.length})`}>
+      <Section
+        title={`등록된 제품 (${products.length})`}
+        action={
+          <button
+            onClick={onAddProduct}
+            className="text-[12px] text-[var(--color-brand-500)] font-bold flex items-center gap-1"
+          >
+            <Icon name="plus" size={14} color="var(--color-brand-500)" /> 제품 추가
+          </button>
+        }
+      >
         {productsLoading ? (
           <EmptyMini text="불러오는 중..." />
         ) : products.length === 0 ? (
@@ -404,20 +449,122 @@ function OverviewTab({
   );
 }
 
+function VisitReadinessCard({
+  team,
+  logoCount,
+  productCount,
+  productsLoading,
+  onAddProduct,
+  onOpenAssets,
+  onOpenShare,
+  onEditTeam,
+}: {
+  team: Team;
+  logoCount: number;
+  productCount: number;
+  productsLoading: boolean;
+  onAddProduct: () => void;
+  onOpenAssets: () => void;
+  onOpenShare: () => void;
+  onEditTeam: () => void;
+}) {
+  const contactReady = !!team.phone || team.contacts.some((contact) => !!contact.phone || !!contact.email);
+  const logoReady = logoCount > 0 || !!team.logoUrl;
+  const productReady = productCount > 0;
+  const shareReady = productReady && !!(team.slug || team.shareToken);
+  const steps = [
+    { label: '담당자 정보', ready: contactReady, icon: 'user' },
+    { label: '로고 확보', ready: logoReady, icon: 'image' },
+    { label: '제품 진열', ready: productReady, icon: 'package' },
+    { label: '고객 공유', ready: shareReady, icon: 'share' },
+  ] as const;
+  const doneCount = steps.filter((step) => step.ready).length;
+  const percent = Math.round((doneCount / steps.length) * 100);
+  const nextAction = !contactReady
+    ? { label: '담당자 보강', onClick: onEditTeam, icon: 'edit' as const }
+    : !logoReady
+      ? { label: '로고 등록', onClick: onOpenAssets, icon: 'image' as const }
+      : !productReady
+        ? { label: '제품 만들기', onClick: onAddProduct, icon: 'plus' as const }
+        : { label: '고객에게 공유', onClick: onOpenShare, icon: 'share' as const };
+  const summary = doneCount === steps.length
+    ? '현장에서 바로 링크를 열어 주문까지 안내할 수 있습니다.'
+    : !contactReady
+      ? '담당자 연락처를 먼저 보강하면 상담 후속관리가 쉬워집니다.'
+      : !logoReady
+        ? '로고를 등록하면 제품 시안에 바로 재사용할 수 있습니다.'
+        : productsLoading
+          ? '제품 진열 상태를 확인하는 중입니다.'
+          : !productReady
+            ? '제품을 하나 이상 진열하면 고객이 그대로 확인하고 주문할 수 있습니다.'
+            : '공유 링크를 열어 고객 휴대폰에서 주문 여정을 시작하세요.';
+
+  return (
+    <Card padding="md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-extrabold text-[var(--color-ink)]">현장 상담 준비</p>
+          <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-0.5">{summary}</p>
+        </div>
+        <div className="w-14 flex-shrink-0 text-right">
+          <p className="text-[18px] font-extrabold text-[var(--color-brand-600)] leading-none num">{percent}%</p>
+          <p className="text-[10px] text-[var(--color-faint)] mt-1">{doneCount}/{steps.length}</p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        {steps.map((step) => (
+          <div
+            key={step.label}
+            className={`rounded-[10px] px-1.5 py-2 text-center ring-1 ${
+              step.ready
+                ? 'bg-[var(--color-brand-100)]/70 ring-[var(--color-brand-100)]'
+                : 'bg-[var(--color-surface-alt)] ring-[var(--color-hairline-soft)]'
+            }`}
+          >
+            <div className="h-5 flex items-center justify-center">
+              <Icon
+                name={step.ready ? 'check' : step.icon}
+                size={14}
+                color={step.ready ? 'var(--color-brand-600)' : 'var(--color-muted)'}
+                strokeWidth={step.ready ? 2.5 : 1.8}
+              />
+            </div>
+            <p className={`text-[10px] mt-1 font-bold leading-tight ${step.ready ? 'text-[var(--color-brand-700)]' : 'text-[var(--color-muted)]'}`}>
+              {step.label}
+            </p>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={nextAction.onClick}
+        className="mt-3 w-full rounded-[12px] bg-[var(--color-ink)] py-2.5 text-[12px] font-bold text-white flex items-center justify-center gap-1 active:opacity-90"
+      >
+        <Icon name={nextAction.icon} size={14} color="white" />
+        {nextAction.label}
+      </button>
+    </Card>
+  );
+}
+
 // =====================================================================
 // 제품 탭 — 진열대 (단일 클릭 = 즉시 1개 주문, 다중 선택 토글로 묶음 주문)
 // =====================================================================
 function ProductsTab({
   products,
   loading,
+  logoCount,
   onAdd,
+  onOpenAssets,
   onOrderSingle,
   onOrderMulti,
   onMutate,
 }: {
   products: TeamProductRow[];
   loading: boolean;
+  logoCount: number;
   onAdd: () => void;
+  onOpenAssets: () => void;
   onOrderSingle: (p: TeamProductRow) => void;
   onOrderMulti: (picked: TeamProductRow[]) => void;
   onMutate: () => void | Promise<unknown>;
@@ -468,9 +615,17 @@ function ProductsTab({
               첫 디자인을 만들어 진열해보세요.<br />
               사장님이 mall URL에서 그대로 보고 주문할 수 있어요.
             </p>
+            {logoCount === 0 && (
+              <button
+                onClick={onOpenAssets}
+                className="mb-2 w-full max-w-[220px] rounded-[12px] bg-[var(--color-brand-100)] px-4 py-2.5 text-[12px] font-bold text-[var(--color-brand-700)] flex items-center justify-center gap-1 active:bg-[var(--color-brand-100)]/70"
+              >
+                <Icon name="image" size={14} color="var(--color-brand-700)" /> 로고 먼저 등록
+              </button>
+            )}
             <button
               onClick={onAdd}
-              className="bg-[var(--color-brand-500)] text-white font-bold py-2.5 px-5 rounded-[12px] text-[13px] inline-flex items-center gap-2 active:bg-[var(--color-brand-600)]"
+              className="w-full max-w-[220px] bg-[var(--color-brand-500)] text-white font-bold py-2.5 px-5 rounded-[12px] text-[13px] inline-flex items-center justify-center gap-2 active:bg-[var(--color-brand-600)]"
             >
               <Icon name="plus" size={14} color="white" /> 새 제품 만들기
             </button>
@@ -834,6 +989,7 @@ function OrdersTab({ orders, isLoading }: { orders: TeamOrderRow[]; isLoading: b
 }
 
 function OrderRowCard({ order }: { order: TeamOrderRow }) {
+  const [copied, setCopied] = useState(false);
   const statusInfo = (() => {
     switch (order.payment_status) {
       case 'completed':
@@ -848,15 +1004,73 @@ function OrderRowCard({ order }: { order: TeamOrderRow }) {
         return { label: order.payment_status ?? '미상', color: 'var(--color-muted)', bg: 'rgba(92,101,115,0.12)' };
     }
   })();
+  const orderStatusInfo = (() => {
+    switch (order.order_status) {
+      case 'payment_pending':
+        return '주문 결제대기';
+      case 'payment_completed':
+        return '주문 결제완료';
+      case 'in_production':
+        return '제작중';
+      case 'shipping':
+        return '배송중';
+      case 'delivered':
+        return '배송완료';
+      case 'cancelled':
+        return '주문 취소';
+      case 'partially_cancelled':
+        return '부분취소';
+      default:
+        return order.order_status || '주문 상태 미상';
+    }
+  })();
+  const linkUrl = buildPaymentLinkUrl(order.payment_link_token);
+  const linkExpiry = paymentLinkExpiry(order.payment_link_expires_at);
+  const discountTotal = Math.max(0, Number(order.coupon_discount) || 0) + Math.max(0, Number(order.salesman_discount_amount) || 0);
+
+  const copyPaymentLink = async () => {
+    if (!linkUrl) return;
+    try {
+      await navigator.clipboard.writeText(linkUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const sharePaymentLink = async () => {
+    if (!linkUrl) return;
+    const text = paymentLinkMessage({
+      orderId: order.id,
+      url: linkUrl,
+      customerName: order.customer_name,
+      amount: Number(order.total_amount) || null,
+    });
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      await navigator.share({ title: `주문 ${order.id} 결제`, text, url: linkUrl }).catch(() => copyPaymentLink());
+      return;
+    }
+    await copyPaymentLink();
+  };
 
   return (
     <Card padding="md">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-mono text-[var(--color-muted)] num">{order.id}</p>
-          <p className="text-[11px] text-[var(--color-faint)]">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <span className="text-[9px] font-bold bg-[var(--color-brand-100)] text-[var(--color-brand-700)] px-1.5 py-0.5 rounded">
+              영업몰 주문
+            </span>
+            <span className="text-[9px] font-bold bg-[var(--color-surface-alt)] text-[var(--color-muted)] px-1.5 py-0.5 rounded">
+              {orderStatusInfo}
+            </span>
+          </div>
+          <p className="text-[12px] font-mono text-[var(--color-muted)] num truncate">{order.id}</p>
+          <p className="text-[11px] text-[var(--color-faint)] leading-relaxed">
             {new Date(order.created_at).toLocaleDateString('ko-KR')}
             {order.customer_name ? ` · ${order.customer_name}` : ''}
+            {order.customer_phone ? ` · ${order.customer_phone}` : ''}
           </p>
         </div>
         <span
@@ -867,18 +1081,63 @@ function OrderRowCard({ order }: { order: TeamOrderRow }) {
         </span>
       </div>
       <HairLine className="my-2" />
+      {order.original_amount != null && Number(order.original_amount) > 0 && (
+        <div className="flex justify-between items-center mt-0.5">
+          <span className="text-[10px] text-[var(--color-muted)]">상품 합계</span>
+          <span className="text-[11px] text-[var(--color-muted)] font-mono num">{fmt(Number(order.original_amount))}</span>
+        </div>
+      )}
+      {order.delivery_fee != null && Number(order.delivery_fee) > 0 && (
+        <div className="flex justify-between items-center mt-0.5">
+          <span className="text-[10px] text-[var(--color-muted)]">배송비</span>
+          <span className="text-[11px] text-[var(--color-muted)] font-mono num">{fmt(Number(order.delivery_fee))}</span>
+        </div>
+      )}
+      {discountTotal > 0 && (
+        <div className="flex justify-between items-center mt-0.5">
+          <span className="text-[10px] text-[var(--color-muted)]">할인 합계</span>
+          <span className="text-[11px] text-[var(--color-brand-500)] font-mono num">-{fmt(discountTotal)}</span>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <span className="text-[11px] text-[var(--color-muted)]">합계</span>
         <span className="text-[15px] font-bold text-[var(--color-ink)] font-mono num">
           {fmt(Number(order.total_amount) || 0)}
         </span>
       </div>
-      {order.coupon_discount && Number(order.coupon_discount) > 0 ? (
-        <div className="flex justify-between items-center mt-0.5">
-          <span className="text-[10px] text-[var(--color-muted)]">쿠폰 할인</span>
-          <span className="text-[11px] text-[var(--color-brand-500)] font-mono num">-{fmt(Number(order.coupon_discount))}</span>
-        </div>
-      ) : null}
+      {linkUrl && order.payment_status === 'pending' && (
+        <>
+          <HairLine className="my-2" />
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-[var(--color-muted)]">결제 링크</span>
+            {linkExpiry.hasExpiry && (
+              <span className={`text-[10px] font-bold ${linkExpiry.expired ? 'text-[var(--color-err)]' : 'text-[var(--color-warn-deep)]'}`}>
+                {linkExpiry.expired ? '만료됨' : `만료 D-${linkExpiry.daysLeft}`}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={copyPaymentLink}
+              className={`py-2 rounded-[10px] text-[12px] font-bold flex items-center justify-center gap-1 ${
+                copied
+                  ? 'bg-[var(--color-pos)]/10 text-[var(--color-pos)]'
+                  : 'bg-[var(--color-brand-500)] text-white active:bg-[var(--color-brand-600)]'
+              }`}
+            >
+              <Icon name={copied ? 'check' : 'share'} size={13} color={copied ? 'var(--color-pos)' : 'white'} />
+              {copied ? '복사됨' : '링크 복사'}
+            </button>
+            <button
+              onClick={sharePaymentLink}
+              className="py-2 rounded-[10px] text-[12px] font-bold bg-[var(--color-ink)] text-white active:opacity-90 flex items-center justify-center gap-1"
+            >
+              <Icon name="share" size={13} color="white" />
+              고객 전송
+            </button>
+          </div>
+        </>
+      )}
       {order.notes && (
         <p className="text-[10px] text-[var(--color-faint)] mt-2 leading-relaxed line-clamp-2">{order.notes}</p>
       )}
@@ -1034,7 +1293,26 @@ function AssetsTab({
         }
       >
         {logos.length === 0 ? (
-          <EmptyMini text="등록된 로고가 없습니다" />
+          <Card padding="md" variant="flat">
+            <div className="flex flex-col items-center text-center gap-3 py-2">
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
+                <Icon name="image" size={22} color="var(--color-brand-500)" />
+              </div>
+              <div>
+                <p className="text-[13px] font-bold text-[var(--color-ink)]">등록된 로고가 없습니다</p>
+                <p className="text-[11px] text-[var(--color-muted)] mt-1 leading-relaxed">
+                  매장에서 받은 로고를 먼저 올리면 시안과 mall 대표 이미지에 바로 쓸 수 있어요.
+                </p>
+              </div>
+              <button
+                disabled={uploading}
+                onClick={() => onPickFile('logo')}
+                className="rounded-[12px] bg-[var(--color-brand-500)] px-5 py-2.5 text-[13px] font-bold text-white disabled:opacity-50 active:bg-[var(--color-brand-600)] flex items-center gap-1"
+              >
+                <Icon name="plus" size={14} color="white" /> 로고 업로드
+              </button>
+            </div>
+          </Card>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {logos.map((a) => (
@@ -1157,11 +1435,14 @@ function AssetThumb({
 // =====================================================================
 // 공유 링크 탭
 // =====================================================================
-function ShareLinkTab({ team }: { team: Team }) {
+function ShareLinkTab({ team, productJustAdded = false }: { team: Team; productJustAdded?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [guideCopied, setGuideCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
   // 담당자 이메일로 몰 링크 자동 발송 (Gmail SMTP)
+  const primaryContact = team.contacts.find((c) => c.isPrimary) ?? team.contacts[0] ?? null;
+  const recipientLabel = primaryContact?.name ? `${primaryContact.name}님` : '담당자님';
   const primaryEmail = team.contacts.find((c) => c.email)?.email ?? '';
   const [emailInput, setEmailInput] = useState(primaryEmail);
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -1188,11 +1469,9 @@ function ShareLinkTab({ team }: { team: Team }) {
   const customerAppBase = 'https://modoouniform.com';
 
   // 사용자 지정 slug 우선, 없으면 share_token fallback. team prop은 mutate 안 되므로
-  // 편집 후엔 currentSlug 로컬 상태를 사용한다.
-  const [currentSlug, setCurrentSlug] = useState<string | null>(team.slug ?? null);
-  useEffect(() => {
-    setCurrentSlug(team.slug ?? null);
-  }, [team.slug]);
+  // 편집 후엔 현재 팀에 한해서 로컬 override를 사용한다.
+  const [slugOverride, setSlugOverride] = useState<{ teamId: string; slug: string | null } | null>(null);
+  const currentSlug = slugOverride?.teamId === team.id ? slugOverride.slug : team.slug ?? null;
 
   const effectiveSlug = currentSlug || team.shareToken;
   const link = effectiveSlug ? `${customerAppBase}/mall/${effectiveSlug}` : null;
@@ -1216,12 +1495,12 @@ function ShareLinkTab({ team }: { team: Team }) {
   // 디바운스 가용성 체크
   useEffect(() => {
     if (!editingSlug) return;
-    if (!slugDraft.trim()) {
-      setSlugCheck({ state: 'idle' });
-      return;
-    }
-    setSlugCheck({ state: 'checking' });
     const handle = setTimeout(async () => {
+      if (!slugDraft.trim()) {
+        setSlugCheck({ state: 'idle' });
+        return;
+      }
+      setSlugCheck({ state: 'checking' });
       try {
         const res = await fetch(
           `/api/salesman/teams/${team.id}/slug?candidate=${encodeURIComponent(slugDraft)}`,
@@ -1241,7 +1520,7 @@ function ShareLinkTab({ team }: { team: Team }) {
       } catch {
         setSlugCheck({ state: 'invalid' });
       }
-    }, 350);
+    }, slugDraft.trim() ? 350 : 0);
     return () => clearTimeout(handle);
   }, [slugDraft, editingSlug, team.id]);
 
@@ -1258,7 +1537,7 @@ function ShareLinkTab({ team }: { team: Team }) {
       if (!res.ok) {
         throw new Error(json?.error || '저장 실패');
       }
-      setCurrentSlug(json?.data?.slug ?? null);
+      setSlugOverride({ teamId: team.id, slug: json?.data?.slug ?? null });
       setEditingSlug(false);
       setSlugDraft('');
       setSlugCheck({ state: 'idle' });
@@ -1277,6 +1556,27 @@ function ShareLinkTab({ team }: { team: Team }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // noop
+    }
+  };
+
+  const copyCustomerGuide = async () => {
+    if (!link) return;
+    const message = [
+      `${recipientLabel}, 모두의 유니폼 전용 페이지입니다.`,
+      link,
+      '',
+      '1. 링크를 열고 회원가입 또는 로그인해 주세요.',
+      '2. 세팅된 의류와 디자인을 확인해 주세요.',
+      '3. 사이즈와 수량을 선택하면 주문서로 바로 이동합니다.',
+      '4. 결제 시 담당 영업 할인과 매출 귀속이 자동 적용됩니다.',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(message);
+      setGuideCopied(true);
+      setTimeout(() => setGuideCopied(false), 2000);
+    } catch {
+      setGuideCopied(false);
     }
   };
 
@@ -1333,6 +1633,60 @@ function ShareLinkTab({ team }: { team: Team }) {
 
       {link ? (
         <>
+          {productJustAdded && (
+            <Card padding="md" className="border-[var(--color-brand-500)]/30 bg-[var(--color-brand-100)]/45">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
+                  <Icon name="check" size={18} color="var(--color-brand-600)" strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-extrabold text-[var(--color-ink)]">제품 등록 완료</p>
+                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-0.5">
+                    이제 QR을 보여주거나 링크를 복사해서 담당자에게 바로 주문 화면을 열어주세요.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card padding="md" className="bg-[#F8FAFC]">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center flex-shrink-0 ring-1 ring-[var(--color-hairline-soft)]">
+                <Icon name="target" size={17} color="var(--color-brand-500)" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-extrabold text-[var(--color-ink)]">현장 전달 순서</p>
+                <div className="mt-2 space-y-1.5">
+                  {[
+                    '담당자 휴대폰으로 QR 또는 링크 열기',
+                    '회원가입 또는 로그인',
+                    '세팅된 의류와 디자인 확인',
+                    '사이즈와 수량 선택 후 주문서 이동',
+                  ].map((step, index) => (
+                    <div key={step} className="flex items-center gap-2 text-[11px] text-[var(--color-body)]">
+                      <span className="w-5 h-5 rounded-full bg-white text-[var(--color-brand-600)] font-extrabold flex items-center justify-center ring-1 ring-[var(--color-brand-100)] num">
+                        {index + 1}
+                      </span>
+                      <span className="leading-snug">{step}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyCustomerGuide}
+                  className={`mt-3 w-full rounded-[12px] py-2 text-[12px] font-bold flex items-center justify-center gap-1 ${
+                    guideCopied
+                      ? 'bg-[var(--color-pos)]/10 text-[var(--color-pos)]'
+                      : 'bg-white text-[var(--color-brand-700)] ring-1 ring-[var(--color-brand-100)] active:bg-[var(--color-brand-100)]'
+                  }`}
+                >
+                  <Icon name={guideCopied ? 'check' : 'send'} size={14} color={guideCopied ? 'var(--color-pos)' : 'var(--color-brand-600)'} />
+                  {guideCopied ? '안내문 복사됨' : '담당자 안내문 복사'}
+                </button>
+              </div>
+            </div>
+          </Card>
+
           {qrSrc && (
             <Card padding="md">
               <div className="flex flex-col items-center gap-3">

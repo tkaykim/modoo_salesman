@@ -19,12 +19,25 @@ import { drawAnchorPreviews, clearAnchorPreviews } from './anchorPreviewLayer';
 import LoadingModal from '@/app/components/LoadingModal';
 import {
   BackgroundRemovalFlow,
-  type DesignerRequestPayload,
   type FlowResult,
 } from '@/app/components/background-removal/BackgroundRemovalFlow';
 
 // No-op for tracking (no GTM in salesman)
-const trackDesignAction = (..._args: any[]) => {};
+type DesignAction = {
+  action_type: string;
+  product_id?: string;
+  side_id?: string | null;
+};
+
+const trackDesignAction = (event: DesignAction) => {
+  void event;
+};
+
+const createDesignObjectId = (prefix: string) => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `${prefix}-${uuid}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+};
 
 interface ToolbarProps {
   sides?: ProductSide[];
@@ -34,9 +47,10 @@ interface ToolbarProps {
   onColorPress?: () => void;
   displayColor?: string;
   hasColorOptions?: boolean;
+  teamLogos?: Array<{ url: string; name?: string | null }>;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', productId, onColorPress, displayColor, hasColorOptions }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', productId, onColorPress, displayColor, hasColorOptions, teamLogos = [] }) => {
   const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,6 +76,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   };
   const [bgPending, setBgPending] = useState<BgPending | null>(null);
   const [bgModalOpen, setBgModalOpen] = useState(false);
+  const [logoPickerOpen, setLogoPickerOpen] = useState(false);
 
   // Anchor preset panel state
   const [isAnchorPanelOpen, setIsAnchorPanelOpen] = useState(false);
@@ -71,9 +86,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   useEffect(() => {
     let cancelled = false;
     if (!productId || !activeSideId) {
-      setSideAnchors([]);
-      setNativeMmPerPxForSide(0);
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setSideAnchors([]);
+        setNativeMmPerPxForSide(0);
+      });
+      return () => { cancelled = true; };
     }
     fetchProductCalibrations(productId).then((map) => {
       if (cancelled) return;
@@ -178,11 +196,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   useEffect(() => {
     const canvas = getActiveCanvas();
     if (!canvas) {
-      setSelectedObject(null);
+      queueMicrotask(() => setSelectedObject(null));
       return;
     }
 
-    setSelectedObject(null);
+    queueMicrotask(() => setSelectedObject(null));
 
     const handleSelectionCreated = (options: { selected: fabric.FabricObject[] }) => {
       const selected = options.selected?.[0] || canvas.getActiveObject();
@@ -231,7 +249,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     const canvas = getActiveCanvas();
     if (!canvas) return;
 
-    const objectId = `text-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    const objectId = createDesignObjectId('text');
 
     const text = new fabric.IText('modoo', {
       left: canvas.width / 2,
@@ -419,7 +437,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
         originY: 'center',
       });
 
-      const objectId = `image-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      const objectId = createDesignObjectId('image');
 
       // @ts-expect-error - Adding custom data property to FabricImage
       img.data = {
@@ -451,6 +469,72 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     } finally {
       setBgPending(null);
     }
+  };
+
+  const placeImageFromUrl = async (url: string, name: string | null | undefined, source: 'team_logo' | 'external') => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+
+    setLoadingMessage(source === 'team_logo' ? '로고 불러오는 중...' : '이미지 불러오는 중...');
+    setLoadingSubmessage('캔버스에 이미지를 추가하고 있습니다.');
+    setIsLoadingModalOpen(true);
+
+    try {
+      const img = await fabric.FabricImage.fromURL(url, {
+        crossOrigin: 'anonymous',
+      });
+
+      const maxWidth = canvas.width * 0.42;
+      const maxHeight = canvas.height * 0.42;
+      if (img.width > maxWidth || img.height > maxHeight) {
+        const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+        img.scale(scale);
+      }
+
+      img.set({
+        left: canvas.width / 2,
+        top: canvas.height / 2,
+        originX: 'center',
+        originY: 'center',
+      });
+
+      const objectId = createDesignObjectId(source);
+
+      // @ts-expect-error - Adding custom data property to FabricImage
+      img.data = {
+        // @ts-expect-error - Reading data property
+        ...(img.data || {}),
+        objectId,
+        supabaseUrl: url,
+        originalFileName: name || 'team-logo',
+        fileType: 'image',
+        uploadedAt: new Date().toISOString(),
+        printMethod: 'dtf',
+        source,
+      };
+
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      setSelectedObject(img);
+      canvas.renderAll();
+      incrementCanvasVersion();
+      trackDesignAction({ action_type: 'image_upload', product_id: productId, side_id: activeSideId });
+    } catch (error) {
+      console.error('Error placing image from URL:', error);
+      alert(source === 'team_logo' ? '로고를 캔버스에 추가하지 못했습니다.' : '이미지를 캔버스에 추가하지 못했습니다.');
+    } finally {
+      setIsLoadingModalOpen(false);
+    }
+  };
+
+  const handleTeamLogoClick = async () => {
+    if (teamLogos.length === 0) return;
+    if (teamLogos.length === 1) {
+      await placeImageFromUrl(teamLogos[0].url, teamLogos[0].name, 'team_logo');
+      setIsExpanded(false);
+      return;
+    }
+    setLogoPickerOpen(true);
   };
 
   const handleSideSelect = (sideId: string) => {
@@ -656,6 +740,45 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     </div>
   ) : null;
 
+  const logoPickerModal = logoPickerOpen ? (
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[300]"
+      onClick={() => setLogoPickerOpen(false)}
+    >
+      <div
+        className="bg-white rounded-lg p-5 max-w-sm w-full mx-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold mb-1">단체 로고 선택</h2>
+        <p className="text-sm text-gray-600 mb-4">캔버스에 넣을 로고를 선택하세요.</p>
+        <div className="grid grid-cols-3 gap-2">
+          {teamLogos.map((logo) => (
+            <button
+              key={logo.url}
+              onClick={async () => {
+                setLogoPickerOpen(false);
+                await placeImageFromUrl(logo.url, logo.name, 'team_logo');
+                setIsExpanded(false);
+              }}
+              className="rounded-lg border border-gray-200 bg-gray-50 p-2 active:bg-gray-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logo.url} alt={logo.name ?? '단체 로고'} className="h-16 w-full object-contain" />
+              <p className="mt-1 truncate text-[10px] text-gray-600">{logo.name ?? '로고'}</p>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setLogoPickerOpen(false)}
+          className="mt-4 w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (isDesktop) {
     return (
       <>
@@ -679,6 +802,14 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
               </div>
               <span className="text-xs text-gray-600 font-medium">이미지</span>
             </button>
+            {teamLogos.length > 0 && (
+              <button onClick={handleTeamLogoClick} className="flex flex-col items-center gap-1.5 group" title="단체 로고 추가">
+                <div className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-50 transition shadow-sm">
+                  <FileImage className="size-5 text-blue-600" />
+                </div>
+                <span className="text-xs text-gray-600 font-medium">로고</span>
+              </button>
+            )}
             {hasAnchors && (
               <button onClick={() => setIsAnchorPanelOpen(true)} className="flex flex-col items-center gap-1.5 group" title="자주 쓰는 위치">
                 <div className="w-12 h-12 rounded-full border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-50 transition shadow-sm text-lg">
@@ -701,6 +832,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
         <LoadingModal isOpen={isLoadingModalOpen} message={loadingMessage} submessage={loadingSubmessage} />
         {imageUploadModal}
+        {logoPickerModal}
         {bgRemovalModal}
       </>
     );
@@ -843,6 +975,14 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
                 </div>
                 <p className="text-xs">이미지</p>
               </button>
+              {teamLogos.length > 0 && (
+                <button onClick={handleTeamLogoClick}>
+                  <div className="bg-white rounded-full p-3 text-sm font-medium transition hover:bg-gray-50 border border-gray-200 whitespace-nowrap">
+                    <FileImage className="text-blue-600" />
+                  </div>
+                  <p className="text-xs">로고</p>
+                </button>
+              )}
             </div>
 
             {/* Color button */}
@@ -908,6 +1048,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
       <LoadingModal isOpen={isLoadingModalOpen} message={loadingMessage} submessage={loadingSubmessage} />
       {imageUploadModal}
+      {logoPickerModal}
       {bgRemovalModal}
     </>
   );

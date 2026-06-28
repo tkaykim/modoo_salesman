@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="960" height="420" viewBox="0 0 960 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="420" rx="52" fill="#0052cc"/>
+  <rect x="0" y="314" width="960" height="106" fill="#07101f"/>
+  <text x="66" y="150" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="112" font-weight="900">MODOO</text>
+  <text x="66" y="270" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="92" font-weight="900">PARTNERS</text>
+  <text x="72" y="382" fill="#ffffff" font-family="Arial Black, Pretendard, Arial, sans-serif" font-size="46" font-weight="900">모두 파트너스</text>
+  <rect x="698" y="344" width="184" height="20" rx="10" fill="#0052cc"/>
+</svg>

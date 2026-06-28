@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSalesmanStore } from '@/store/useSalesmanStore';
@@ -74,18 +75,15 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         {/* Brand mark */}
         <div className="text-center mb-8">
-          <div
-            className="w-16 h-16 mx-auto mb-4 rounded-[20px] flex items-center justify-center"
-            style={{
-              background: 'var(--color-brand-500)',
-              boxShadow: 'var(--shadow-cta)',
-            }}
-          >
-            <Icon name="sparkle" size={28} color="white" strokeWidth={2.2} />
-          </div>
-          <h1 className="text-[20px] font-black text-[var(--color-ink)] tracking-tight">
-            모두의 유니폼
-          </h1>
+          <Image
+            src="/brand/modoo-partners-logo.png"
+            alt="MODOO PARTNERS"
+            width={960}
+            height={420}
+            priority
+            unoptimized
+            className="mx-auto mb-4 h-auto w-[176px] rounded-[16px] shadow-[0_14px_32px_rgba(0,82,204,0.22)]"
+          />
           <p className="text-[12px] text-[var(--color-muted)] mt-1 font-medium">
             영업사원 전용 앱
           </p>

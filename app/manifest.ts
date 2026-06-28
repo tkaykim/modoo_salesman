@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: '모두의 유니폼 — 영업사원',
-    short_name: '모두유니폼',
-    description: '단체복 영업사원 전용 모바일 앱. 단체 관리·재발주·견적·수당 추적.',
+    name: '모두 파트너스',
+    short_name: '모두파트너스',
+    description: '모두의 유니폼 단체복 소개 파트너 전용 모바일 앱.',
     start_url: '/',
     scope: '/',
     display: 'standalone',
@@ -13,6 +13,24 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#0052cc',
     lang: 'ko',
     icons: [
+      {
+        src: '/icons/modoo-partners-icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/modoo-partners-icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/modoo-partners-maskable-icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
       {
         src: '/icon.svg',
         sizes: 'any',

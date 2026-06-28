@@ -1,6 +1,14 @@
 // modoo_salesman service worker (basic shell — 캐싱 전략은 향후 확장)
-const CACHE_NAME = 'modoo-salesman-shell-v1';
-const SHELL_ASSETS = ['/', '/login', '/icon.svg'];
+const CACHE_NAME = 'modoo-salesman-shell-v2';
+const SHELL_ASSETS = [
+  '/',
+  '/login',
+  '/icon.svg',
+  '/icons/modoo-partners-icon-192.png',
+  '/icons/modoo-partners-icon-512.png',
+  '/apple-touch-icon.png',
+  '/brand/modoo-partners-logo.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

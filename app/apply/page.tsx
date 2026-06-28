@@ -219,9 +219,15 @@ export default function ApplyPage() {
         >
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#0052cc]">
-                <Icon name="trophy" size={20} color="white" strokeWidth={2.2} />
-              </div>
+              <Image
+                src="/icons/modoo-partners-icon-192.png"
+                alt="모두 파트너스"
+                width={36}
+                height={36}
+                priority
+                unoptimized
+                className="h-9 w-9 rounded-[12px] shadow-[0_8px_18px_rgba(0,82,204,0.24)]"
+              />
               <div>
                 <p className="text-[13px] font-black">모두 파트너스</p>
                 <p className="text-[10px] font-bold text-white/70">단체복 소개 파트너</p>

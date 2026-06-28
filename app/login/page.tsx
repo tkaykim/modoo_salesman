@@ -68,24 +68,28 @@ function LoginForm() {
     <div
       className="min-h-[100dvh] flex flex-col items-center justify-center px-5"
       style={{
-        background:
-          'radial-gradient(circle at 30% 20%, rgba(0,82,204,0.08) 0%, transparent 60%), radial-gradient(circle at 70% 80%, rgba(0,82,204,0.04) 0%, transparent 60%), var(--color-surface)',
+        background: 'linear-gradient(180deg, var(--color-brand-softer) 0%, #ffffff 100%)',
       }}
     >
       <div className="w-full max-w-sm">
-        {/* Brand mark */}
-        <div className="text-center mb-8">
+        <div className="mb-7 flex flex-col items-center text-center">
           <Image
-            src="/brand/modoo-partners-logo.png"
-            alt="MODOO PARTNERS"
-            width={960}
-            height={420}
+            src="/icons/modoo-partners-icon-192.png"
+            alt="MODOO PARTNERS 앱 아이콘"
+            width={76}
+            height={76}
             priority
             unoptimized
-            className="mx-auto mb-4 h-auto w-[176px] rounded-[16px] shadow-[0_14px_32px_rgba(0,82,204,0.22)]"
+            className="h-[76px] w-[76px] rounded-[22px] shadow-[0_12px_26px_rgba(0,82,204,0.20)]"
           />
-          <p className="text-[12px] text-[var(--color-muted)] mt-1 font-medium">
-            영업사원 전용 앱
+          <p className="mt-4 text-[13px] font-black text-[var(--color-brand-500)]">
+            MODOO PARTNERS
+          </p>
+          <h1 className="mt-1 text-[24px] font-black leading-tight text-[var(--color-ink)]">
+            모두 파트너스
+          </h1>
+          <p className="mt-1 text-[12px] font-medium text-[var(--color-muted)]">
+            단체복 소개 영업사원 앱
           </p>
         </div>
 
@@ -164,7 +168,7 @@ function LoginForm() {
               className="w-full rounded-[14px] bg-[var(--color-brand-500)] px-3 py-3 text-white text-[15px] font-bold active:bg-[var(--color-brand-600)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               style={!isSubmitting ? { boxShadow: 'var(--shadow-cta)' } : undefined}
             >
-              {isSubmitting ? '로그인 중...' : '로그인'}
+              {isSubmitting ? '로그인 중…' : '로그인'}
             </button>
           </form>
 
@@ -179,9 +183,9 @@ function LoginForm() {
               type="button"
               onClick={() => handleOAuth('kakao')}
               disabled={oauthLoading !== null}
-              className="w-full rounded-[12px] bg-[#FEE500] px-3 py-2.5 text-[14px] font-bold text-[#191919] disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full rounded-[12px] bg-[var(--color-ink)] px-3 py-2.5 text-[14px] font-bold text-white disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {oauthLoading === 'kakao' ? '연결 중...' : '카카오로 로그인'}
+              {oauthLoading === 'kakao' ? '연결 중…' : '카카오 계정으로 로그인'}
             </button>
             <button
               type="button"
@@ -189,7 +193,7 @@ function LoginForm() {
               disabled={oauthLoading !== null}
               className="w-full rounded-[12px] border border-[var(--color-hairline)] bg-white px-3 py-2.5 text-[14px] font-bold text-[var(--color-ink)] disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {oauthLoading === 'google' ? '연결 중...' : 'Google로 로그인'}
+              {oauthLoading === 'google' ? '연결 중…' : 'Google 계정으로 로그인'}
             </button>
           </div>
         </div>

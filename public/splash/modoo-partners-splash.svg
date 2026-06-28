@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1170" height="2532" fill="#0052cc"/>
-  <rect x="140" y="868" width="890" height="496" rx="72" fill="#ffffff" fill-opacity="0.10"/>
-  <rect x="185" y="925" width="800" height="350" rx="58" fill="#ffffff" fill-opacity="0.08"/>
-  <text x="240" y="1078" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="108" font-weight="900">MODOO</text>
-  <text x="240" y="1190" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="82" font-weight="900">PARTNERS</text>
-  <rect x="240" y="1228" width="512" height="72" rx="20" fill="#07101f"/>
-  <text x="274" y="1278" fill="#ffffff" font-family="Arial Black, Pretendard, Arial, sans-serif" font-size="34" font-weight="900">단체복 소개 파트너</text>
-  <text x="585" y="1458" fill="#ffffff" fill-opacity="0.76" font-family="Pretendard, Arial, sans-serif" font-size="34" font-weight="800" text-anchor="middle">모두의 유니폼 영업사원 앱</text>
+  <rect width="1170" height="2532" fill="#ffffff"/>
+  <rect x="455" y="964" width="260" height="260" rx="66" fill="#0052cc"/>
+  <rect x="496" y="1135" width="178" height="48" rx="18" fill="#07101f"/>
+  <text x="585" y="1087" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="54" font-weight="900" text-anchor="middle">MODOO</text>
+  <text x="585" y="1168" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="24" font-weight="900" text-anchor="middle">PARTNERS</text>
+  <text x="585" y="1338" fill="#07101f" font-family="Arial Black, Arial, sans-serif" font-size="72" font-weight="900" text-anchor="middle">MODOO</text>
+  <text x="585" y="1418" fill="#0052cc" font-family="Arial Black, Arial, sans-serif" font-size="60" font-weight="900" text-anchor="middle">PARTNERS</text>
+  <text x="585" y="1492" fill="#003d99" font-family="Malgun Gothic, Arial, sans-serif" font-size="34" font-weight="700" text-anchor="middle">단체복 소개 파트너 앱</text>
 </svg>

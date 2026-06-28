@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" rx="112" fill="#0052cc"/>
-  <rect x="44" y="46" width="424" height="424" rx="58" fill="#ffffff" fill-opacity="0.10"/>
-  <text x="60" y="192" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="72" font-weight="900">MODOO</text>
-  <text x="60" y="278" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="55" font-weight="900">PARTNERS</text>
-  <rect x="62" y="318" width="388" height="18" rx="9" fill="#07101f"/>
+  <rect x="54" y="336" width="404" height="72" rx="24" fill="#07101f"/>
+  <text x="256" y="246" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="82" font-weight="900" text-anchor="middle">MODOO</text>
+  <text x="256" y="382" fill="#ffffff" font-family="Arial Black, Arial, sans-serif" font-size="32" font-weight="900" text-anchor="middle">PARTNERS</text>
 </svg>

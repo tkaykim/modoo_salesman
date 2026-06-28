@@ -274,9 +274,9 @@ function PaymentLinkActions({ order }: { order: MyOrderRow }) {
         </button>
         <button
           onClick={kakaoSend}
-          className="flex-1 py-2 rounded-[10px] text-[12px] font-bold bg-[#FEE500] text-[#191600] active:opacity-90 flex items-center justify-center gap-1"
+          className="flex-1 py-2 rounded-[10px] text-[12px] font-bold bg-[var(--color-ink)] text-white active:opacity-90 flex items-center justify-center gap-1"
         >
-          <span aria-hidden>💬</span> 고객에게 전송
+          <Icon name="send" size={14} color="white" /> 고객에게 전송
         </button>
       </div>
     </>

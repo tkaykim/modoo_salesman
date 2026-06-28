@@ -1854,9 +1854,9 @@ function ShareLinkTab({ team, productJustAdded = false }: { team: Team; productJ
           <button
             type="button"
             onClick={kakaoShare}
-            className="w-full rounded-[14px] bg-[#FEE500] py-3 text-[13px] font-bold text-[#191600] active:opacity-90 flex items-center justify-center gap-1.5"
+            className="w-full rounded-[14px] bg-[var(--color-ink)] py-3 text-[13px] font-bold text-white active:opacity-90 flex items-center justify-center gap-1.5"
           >
-            <span aria-hidden>💬</span>
+            <Icon name="send" size={15} color="white" />
             카카오톡으로 보내기
           </button>
 

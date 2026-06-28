@@ -170,7 +170,7 @@ export default function ApplyPage() {
 
           <div className="relative z-10 mt-20">
             <p className="inline-flex items-center gap-1 rounded-full bg-white/16 px-3 py-1 text-[11px] font-black backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ffde59]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#0052cc]" />
               주변 단체복 수요를 용돈벌이로
             </p>
             <h1 className="mt-4 text-[40px] font-black leading-[1.05] tracking-tight">
@@ -193,8 +193,8 @@ export default function ApplyPage() {
                   주문 매출 기준 수수료
                 </p>
               </div>
-              <div className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[#ffe75f]">
-                <Icon name="wallet" size={27} color="#17191f" strokeWidth={2.3} />
+              <div className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[#eaf2ff]">
+                <Icon name="wallet" size={27} color="#0052cc" strokeWidth={2.3} />
               </div>
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2">
@@ -231,7 +231,7 @@ export default function ApplyPage() {
         <section className="px-5">
           <div className="overflow-hidden rounded-[24px] bg-[#17191f] text-white shadow-[0_16px_42px_rgba(18,31,54,0.18)]">
             <div className="p-5">
-              <p className="text-[11px] font-black text-[#ffde59]">PARTNER SCHOOL</p>
+              <p className="text-[11px] font-black text-[#8fb8ff]">PARTNER SCHOOL</p>
               <h2 className="mt-1 text-[23px] font-black leading-tight tracking-tight">
                 시작 후에는 스쿨에서 바로 배웁니다.
               </h2>
@@ -256,7 +256,7 @@ export default function ApplyPage() {
                   딱 필요한 정보만 받을게요.
                 </h2>
               </div>
-              <span className="rounded-full bg-[#fff2c7] px-3 py-1 text-[11px] font-black text-[#8a6200]">
+              <span className="rounded-full bg-[#eaf2ff] px-3 py-1 text-[11px] font-black text-[#0052cc]">
                 {currentStep.eyebrow}
               </span>
             </div>
@@ -284,7 +284,6 @@ export default function ApplyPage() {
                         onChange={(e) => setRegion(e.target.value)}
                         className="modoo-apply-input"
                         placeholder="예: 서울 마포구"
-                        autoFocus
                       />
                       <div className="mt-3 flex flex-wrap gap-2">
                         {REGION_EXAMPLES.map((example) => (
@@ -324,7 +323,6 @@ export default function ApplyPage() {
                       onChange={(e) => setDisplayName(e.target.value)}
                       className="modoo-apply-input"
                       placeholder="예: 김모두"
-                      autoFocus
                     />
                   )}
                   {step === 3 && (
@@ -335,7 +333,6 @@ export default function ApplyPage() {
                       placeholder="010-0000-0000"
                       inputMode="tel"
                       type="tel"
-                      autoFocus
                     />
                   )}
                 </div>

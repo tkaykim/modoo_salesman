@@ -1,25 +1,21 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase-admin';
 
 // 영업사원 셀프 가입 신청 (2026-06-13).
-// 흐름: 신청 폼 → 이 라우트 → auth 사용자 생성 + salesman_profiles status='pending' 적재.
+// 흐름: 간편 상담 신청 폼 → 이 라우트 → 내부 신청 계정 생성 + salesman_profiles status='pending' 적재.
 // 승인은 modoo_admin 영업사원 화면에서 status='active' 전환 시 발효 (그 전까지 로그인해도 대기 안내).
 // service role 사용 — 익명 가입 RLS 우회. 입력 검증은 여기서 책임진다.
 
 interface ApplyBody {
-  email?: string;
-  password?: string;
   display_name?: string;
   phone?: string;
   region?: string;
-  community_type?: string;
-  reachable_groups?: string;
-  activity_time?: string;
-  intro?: string;
+  age_range?: string;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9\-+\s()]{8,20}$/;
+const AGE_RANGES = new Set(['20대', '30대', '40대', '50대 이상']);
 
 export async function POST(req: Request) {
   let body: ApplyBody;
@@ -29,93 +25,71 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
   }
 
-  const email = body.email?.trim().toLowerCase();
-  const password = body.password ?? '';
   const displayName = body.display_name?.trim();
   const phone = body.phone?.trim();
+  const phoneDigits = phone?.replace(/[^0-9]/g, '') ?? '';
   const region = body.region?.trim();
-  const communityType = body.community_type?.trim() || '미입력';
-  const reachableGroups = body.reachable_groups?.trim();
-  const activityTime = body.activity_time?.trim() || '미입력';
-  const intro = body.intro?.trim() || '';
+  const ageRange = body.age_range?.trim();
 
-  if (!email || !EMAIL_RE.test(email)) {
-    return NextResponse.json({ error: '유효한 이메일을 입력해주세요.' }, { status: 400 });
-  }
-  if (password.length < 8) {
-    return NextResponse.json({ error: '비밀번호는 8자 이상이어야 합니다.' }, { status: 400 });
-  }
   if (!displayName || displayName.length < 2) {
     return NextResponse.json({ error: '이름을 입력해주세요.' }, { status: 400 });
   }
-  if (!phone || !PHONE_RE.test(phone)) {
+  if (!phone || !PHONE_RE.test(phone) || phoneDigits.length < 10) {
     return NextResponse.json({ error: '유효한 연락처를 입력해주세요.' }, { status: 400 });
   }
   if (!region || region.length < 2) {
     return NextResponse.json({ error: '활동 지역을 입력해주세요.' }, { status: 400 });
   }
-  if (!reachableGroups || reachableGroups.length < 1) {
-    return NextResponse.json({ error: '바로 연락 가능한 단체 수를 입력해주세요.' }, { status: 400 });
+  if (!ageRange || !AGE_RANGES.has(ageRange)) {
+    return NextResponse.json({ error: '나이대를 선택해주세요.' }, { status: 400 });
   }
 
   const admin = createAdminClient();
   const applicationMeta = {
     region,
-    community_type: communityType,
-    reachable_groups: reachableGroups,
-    activity_time: activityTime,
-    intro,
+    age_range: ageRange,
+    phone: phoneDigits,
     applied_at: new Date().toISOString(),
     source: 'modoo_partners_apply',
+    account_mode: 'lead_only',
   };
   const note = [
-    '[모두 파트너스 지원서]',
-    `활동 지역: ${region}`,
-    `가까운 단체 유형: ${communityType}`,
-    `바로 연락 가능한 단체: ${reachableGroups}`,
-    `활동 가능 시간: ${activityTime}`,
-    intro ? `소개: ${intro}` : null,
+    '[모두 파트너스 상담 신청]',
+    `지역: ${region}`,
+    `나이대: ${ageRange}`,
+    `연락처: ${phoneDigits}`,
+    '신청 방식: 간편 상담 신청',
+    '안내: 로그인 정보를 받지 않은 리드형 신청입니다. 상담 후 계정 안내가 필요합니다.',
   ].filter(Boolean).join('\n');
 
-  // 1) 이미 영업사원 프로필이 있는 이메일인지 (profiles 경유) 확인 — 중복 신청 차단
-  const { data: existingProfile } = await admin
-    .from('profiles')
-    .select('id')
-    .ilike('email', email)
+  // 1) 동일 연락처 신청 중복 차단
+  const { data: existingSalesman } = await admin
+    .from('salesman_profiles')
+    .select('id, status')
+    .eq('phone', phoneDigits)
     .maybeSingle();
 
-  if (existingProfile) {
-    const { data: existingSalesman } = await admin
-      .from('salesman_profiles')
-      .select('id, status')
-      .eq('user_id', existingProfile.id)
-      .maybeSingle();
-    if (existingSalesman) {
-      const msg =
-        existingSalesman.status === 'pending'
-          ? '이미 신청하셨습니다. 승인 대기 중입니다.'
-          : '이미 등록된 계정입니다. 로그인해주세요.';
-      return NextResponse.json({ error: msg, already: true }, { status: 409 });
-    }
-    // 기존 사용자지만 영업사원은 아님 → 보안상 셀프 가입으로 처리하지 않고 안내
-    return NextResponse.json(
-      { error: '이미 가입된 이메일입니다. 로그인 후 본사에 영업사원 전환을 요청해주세요.' },
-      { status: 409 }
-    );
+  if (existingSalesman) {
+    const msg =
+      existingSalesman.status === 'pending'
+        ? '이미 신청하셨습니다. 승인 대기 중입니다.'
+        : '이미 등록된 연락처입니다. 기존 파트너는 로그인해주세요.';
+    return NextResponse.json({ error: msg, already: true }, { status: 409 });
   }
 
-  // 2) auth 사용자 생성 (이메일 확인 생략 — 본사 승인 게이트가 실질 게이트)
+  // 2) auth 사용자 생성 (사용자에게 묻지 않는 내부 신청 계정)
+  const email = `partner-${phoneDigits}-${Date.now().toString(36)}@modoo-partners.local`;
+  const password = `${randomUUID()}${randomUUID()}`;
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { name: displayName, phone, partner_application: applicationMeta },
+    user_metadata: { name: displayName, phone: phoneDigits, partner_application: applicationMeta },
   });
   if (createErr || !created?.user) {
-    const dup = /already|registered|exist/i.test(createErr?.message ?? '');
     return NextResponse.json(
-      { error: dup ? '이미 가입된 이메일입니다. 로그인해주세요.' : `가입 실패: ${createErr?.message ?? '알 수 없는 오류'}` },
-      { status: dup ? 409 : 500 }
+      { error: `신청 계정 생성 실패: ${createErr?.message ?? '알 수 없는 오류'}` },
+      { status: 500 }
     );
   }
   const userId = created.user.id;
@@ -134,7 +108,7 @@ export async function POST(req: Request) {
     grade: 'LV0',
     status: 'pending',
     display_name: displayName,
-    phone,
+    phone: phoneDigits,
     note,
   });
   if (insertErr) {

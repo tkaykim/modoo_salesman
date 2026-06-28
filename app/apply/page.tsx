@@ -1,49 +1,85 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui';
 
+const AGE_OPTIONS = ['20대', '30대', '40대', '50대 이상'];
+
+const REGION_EXAMPLES = ['서울 마포구', '경기 수원', '부산 해운대', '대구 수성구'];
+
 export default function ApplyPage() {
-  const router = useRouter();
+  const [step, setStep] = useState(0);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [password2, setPassword2] = useState('');
   const [region, setRegion] = useState('');
-  const [communityType, setCommunityType] = useState('학교·학과');
-  const [reachableGroups, setReachableGroups] = useState('');
-  const [activityTime, setActivityTime] = useState('주 1~2시간');
-  const [intro, setIntro] = useState('');
+  const [ageRange, setAgeRange] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  const potentialLabel = useMemo(() => {
-    const n = Number(reachableGroups.replace(/[^0-9]/g, ''));
-    if (!Number.isFinite(n) || n <= 0) return '첫 단체 후보';
-    if (n >= 5) return '핵심 파트너 후보';
-    if (n >= 2) return '실전 가능 후보';
-    return '첫 단체 후보';
-  }, [reachableGroups]);
+  const steps = useMemo(
+    () => [
+      {
+        id: 'region',
+        eyebrow: '1 / 4',
+        title: '어느 지역에서 활동하시나요?',
+        desc: '가까운 단체복 수요를 연결할 수 있는 지역만 알려주세요.',
+      },
+      {
+        id: 'age',
+        eyebrow: '2 / 4',
+        title: '나이대를 알려주세요.',
+        desc: '파트너 안내와 교육 자료를 맞춰드리기 위한 기본 정보입니다.',
+      },
+      {
+        id: 'name',
+        eyebrow: '3 / 4',
+        title: '성함을 알려주세요.',
+        desc: '상담 안내를 정확히 드리기 위해 필요합니다.',
+      },
+      {
+        id: 'phone',
+        eyebrow: '4 / 4',
+        title: '연락처를 남겨주세요.',
+        desc: '승인 절차와 시작 안내를 문자 또는 전화로 드립니다.',
+      },
+    ],
+    []
+  );
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const currentStep = steps[step];
+  const progress = ((step + 1) / steps.length) * 100;
+
+  const validateStep = (targetStep = step) => {
+    if (targetStep === 0 && region.trim().length < 2) return '활동 지역을 입력해주세요.';
+    if (targetStep === 1 && !ageRange) return '나이대를 선택해주세요.';
+    if (targetStep === 2 && displayName.trim().length < 2) return '이름을 입력해주세요.';
+    if (targetStep === 3 && phone.replace(/[^0-9]/g, '').length < 10) return '연락처를 입력해주세요.';
+    return null;
+  };
+
+  const goNext = () => {
+    const msg = validateStep();
+    if (msg) {
+      setError(msg);
+      return;
+    }
+    setError(null);
+    setStep((prev) => Math.min(prev + 1, steps.length - 1));
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
-    if (!displayName || !phone || !email || !password || !region || !reachableGroups) {
-      setError('필수 항목을 모두 입력해주세요.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다.');
-      return;
-    }
-    if (password !== password2) {
-      setError('비밀번호가 일치하지 않습니다.');
-      return;
+    for (let i = 0; i < steps.length; i += 1) {
+      const msg = validateStep(i);
+      if (msg) {
+        setStep(i);
+        setError(msg);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -54,13 +90,8 @@ export default function ApplyPage() {
         body: JSON.stringify({
           display_name: displayName,
           phone,
-          email,
-          password,
           region,
-          community_type: communityType,
-          reachable_groups: reachableGroups,
-          activity_time: activityTime,
-          intro,
+          age_range: ageRange,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -78,342 +109,367 @@ export default function ApplyPage() {
 
   if (done) {
     return (
-      <div className="min-h-[100dvh] bg-[var(--color-surface-alt)] px-5 py-8 flex items-center justify-center">
-        <div className="w-full max-w-sm">
-          <div className="rounded-[24px] bg-white p-6 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div
-              className="w-16 h-16 mx-auto mb-4 rounded-[20px] flex items-center justify-center"
-              style={{ background: 'var(--color-pos)', boxShadow: '0 8px 18px rgba(16,185,129,0.25)' }}
-            >
-              <Icon name="check" size={28} color="white" strokeWidth={2.4} />
-            </div>
-            <p className="text-[11px] font-extrabold text-[var(--color-brand-500)] mb-2">
-              MODOO PARTNERS
-            </p>
-            <h1 className="text-[21px] font-black text-[var(--color-ink)] tracking-tight mb-2">
-              지원서가 접수되었습니다
-            </h1>
-            <p className="text-[13px] text-[var(--color-muted)] leading-relaxed mb-5">
-              운영팀이 활동 가능 단체와 지역을 확인한 뒤 승인합니다.
-              <br />
-              승인되면 앱에서 교육 미션과 첫 단체몰 만들기를 시작할 수 있습니다.
-            </p>
-            <div className="rounded-[16px] bg-[var(--color-surface-alt)] p-3 text-left mb-5">
-              <p className="text-[11px] text-[var(--color-muted)] font-bold mb-1">다음 단계</p>
-              <ol className="text-[12px] text-[var(--color-body)] leading-relaxed space-y-1">
-                <li>1. 운영팀 승인 대기</li>
-                <li>2. 파트너 스쿨 필수 교육 수강</li>
-                <li>3. 첫 단체 등록 후 공유 링크 전달</li>
-              </ol>
-            </div>
-            <button
-              onClick={() => router.push('/login')}
-              className="w-full rounded-[14px] bg-[var(--color-brand-500)] px-3 py-3 text-white text-[15px] font-bold active:bg-[var(--color-brand-600)] transition-colors"
-              style={{ boxShadow: 'var(--shadow-cta)' }}
-            >
-              로그인 화면으로
-            </button>
+      <div className="min-h-[100dvh] bg-[#f6f7fb] px-5 py-8 flex items-center justify-center">
+        <div className="w-full max-w-sm rounded-[24px] bg-white p-6 text-center shadow-[0_18px_46px_rgba(18,31,54,0.12)]">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[20px] bg-[#ef2f24] shadow-[0_10px_24px_rgba(239,47,36,0.25)]">
+            <Icon name="check" size={28} color="white" strokeWidth={2.4} />
           </div>
+          <p className="mb-2 text-[11px] font-black text-[#ef2f24]">MODOO PARTNERS</p>
+          <h1 className="mb-2 text-[22px] font-black tracking-tight text-[#17191f]">
+            상담 신청이 완료되었습니다
+          </h1>
+          <p className="mb-5 text-[13px] leading-relaxed text-[#667085]">
+            운영팀이 지역과 기본 정보를 확인한 뒤 연락드립니다.
+            <br />
+            안내를 받은 뒤 파트너 스쿨과 첫 단체몰 만들기를 시작할 수 있습니다.
+          </p>
+          <div className="rounded-[16px] bg-[#f6f7fb] p-4 text-left">
+            <p className="mb-2 text-[12px] font-black text-[#17191f]">다음 안내</p>
+            <p className="text-[12px] leading-relaxed text-[#667085]">
+              1분 내 자동 계정 가입이 아니라, 담당자가 적합한 지역과 활동 방식을 확인한 뒤 시작 안내를 드립니다.
+            </p>
+          </div>
+          <Link
+            href="/login"
+            prefetch={false}
+            className="mt-5 flex w-full items-center justify-center rounded-[16px] bg-[#ef2f24] px-4 py-3.5 text-[14px] font-black text-white active:bg-[#d92a20]"
+          >
+            기존 파트너 로그인
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--color-surface-alt)]">
-      <main className="mx-auto w-full max-w-md pb-10">
-        <section className="bg-white px-5 pt-8 pb-6">
-          <div className="flex items-center justify-between gap-3 mb-8">
+    <div className="min-h-[100dvh] bg-[#f6f7fb] text-[#17191f]">
+      <main className="mx-auto w-full max-w-md overflow-hidden bg-[#f6f7fb] pb-8">
+        <section
+          className="relative min-h-[640px] px-5 pb-6 pt-7 text-white"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(11,18,32,0.38) 0%, rgba(11,18,32,0.68) 42%, rgba(11,18,32,0.92) 100%), url('https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=82')",
+            backgroundPosition: 'center top',
+            backgroundSize: 'cover',
+          }}
+        >
+          <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-[12px] bg-[var(--color-brand-500)] flex items-center justify-center">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#ef2f24]">
                 <Icon name="trophy" size={20} color="white" strokeWidth={2.2} />
               </div>
               <div>
-                <p className="text-[13px] font-black text-[var(--color-ink)]">모두 파트너스</p>
-                <p className="text-[10px] font-bold text-[var(--color-muted)]">단체복 영업 파트너</p>
+                <p className="text-[13px] font-black">모두 파트너스</p>
+                <p className="text-[10px] font-bold text-white/70">단체복 부업 파트너</p>
               </div>
             </div>
-            <Link href="/login" prefetch={false} className="text-[12px] font-bold text-[var(--color-brand-500)]">
+            <Link href="/login" prefetch={false} className="text-[12px] font-black text-white/85">
               로그인
             </Link>
           </div>
 
-          <p className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-100)] px-3 py-1 text-[11px] font-extrabold text-[var(--color-brand-500)]">
-            <Icon name="bolt" size={13} color="var(--color-brand-500)" strokeWidth={2.2} />
-            주변 단체를 주문 링크로 연결
-          </p>
-          <h1 className="mt-4 text-[33px] font-black leading-[1.12] tracking-tight text-[var(--color-ink)]">
-            하루 1시간,
-            <br />
-            단체복 주문을
-            <br />
-            수익으로 연결하세요
-          </h1>
-          <p className="mt-4 text-[14px] leading-relaxed text-[var(--color-muted)]">
-            디자인, 제작, 결제, 배송은 모두의 유니폼이 맡고 파트너는 가까운 단체를 발굴해 전용 주문 링크를 전달합니다.
-          </p>
+          <div className="relative z-10 mt-20">
+            <p className="inline-flex items-center gap-1 rounded-full bg-white/16 px-3 py-1 text-[11px] font-black backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ffde59]" />
+              주변 단체복 수요를 용돈벌이로
+            </p>
+            <h1 className="mt-4 text-[40px] font-black leading-[1.05] tracking-tight">
+              하루 1시간,
+              <br />
+              단체복 주문을
+              <br />
+              수익으로 연결하세요
+            </h1>
+            <p className="mt-4 max-w-[320px] text-[14px] leading-relaxed text-white/78">
+              학교, 동호회, 학원, 매장처럼 단체복이 필요한 곳을 모두의 유니폼 주문 링크로 연결하는 부업입니다.
+            </p>
+          </div>
 
-          <div className="mt-6 rounded-[22px] bg-[var(--color-ink)] p-4 text-white">
-            <div className="grid grid-cols-3 gap-2">
-              <HeroMetric label="초기비용" value="0원" />
-              <HeroMetric label="출퇴근" value="없음" />
-              <HeroMetric label="정산" value="월별" />
-            </div>
-            <div className="mt-4 rounded-[16px] bg-white/9 p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-[15px] bg-[var(--color-gold)] flex items-center justify-center">
-                  <Icon name="wallet" size={24} color="var(--color-ink)" strokeWidth={2.2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-white/65 font-bold">수익 구조</p>
-                  <p className="text-[15px] font-extrabold mt-0.5">
-                    결제 주문 매출 기준 수수료
-                  </p>
-                </div>
+          <div className="relative z-10 mt-8 rounded-[18px] bg-white p-4 text-[#17191f] shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black text-[#ef2f24]">예상 수익 방식</p>
+                <p className="mt-1 text-[24px] font-black tracking-tight">
+                  주문 매출 기준 수수료
+                </p>
               </div>
+              <div className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[#ffe75f]">
+                <Icon name="wallet" size={27} color="#17191f" strokeWidth={2.3} />
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <HeroMetric label="초기비용" value="0원" />
+              <HeroMetric label="시간" value="자율" />
+              <HeroMetric label="교육" value="지원" />
+            </div>
+          </div>
+        </section>
+
+        <section className="-mt-3 rounded-t-[28px] bg-[#f6f7fb] px-5 pb-2 pt-6">
+          <SectionTitle eyebrow="HOW IT WORKS" title="복잡한 판매가 아니라 연결하는 일입니다." />
+          <div className="mt-4 space-y-3">
+            <FlowCard step="01" title="가까운 단체를 떠올립니다" desc="학과, 동호회, 학원, 매장처럼 단체복을 맞출 가능성이 있는 곳이면 충분합니다." icon="group" />
+            <FlowCard step="02" title="주문 링크를 전달합니다" desc="디자인, 상품 구성, 결제 페이지는 모두의 유니폼 시스템에서 준비합니다." icon="qr" />
+            <FlowCard step="03" title="주문이 결제되면 수수료가 쌓입니다" desc="실제 결제 주문을 기준으로 정산 대상 매출이 잡히고 월별로 확인합니다." icon="wallet" />
+          </div>
+        </section>
+
+        <section className="px-5 py-5">
+          <div className="rounded-[22px] bg-white p-5 shadow-[0_10px_28px_rgba(18,31,54,0.08)]">
+            <p className="text-center text-[24px] font-black leading-tight tracking-tight">
+              이런 분께 잘 맞아요
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <FitCard title="주변에 모임이 많아요" desc="학교, 동호회, 학원, 회사 지인이 있는 분" />
+              <FitCard title="영업 경험은 없어요" desc="처음이어도 스크립트와 교육으로 시작" />
+              <FitCard title="퇴근 후 가능해요" desc="정해진 출퇴근 없이 자율 활동" />
+              <FitCard title="부담 없이 해보고 싶어요" desc="초기비용 없이 상담 후 시작" />
+            </div>
+          </div>
+        </section>
+
+        <section className="px-5">
+          <div className="overflow-hidden rounded-[24px] bg-[#17191f] text-white shadow-[0_16px_42px_rgba(18,31,54,0.18)]">
+            <div className="p-5">
+              <p className="text-[11px] font-black text-[#ffde59]">PARTNER SCHOOL</p>
+              <h2 className="mt-1 text-[23px] font-black leading-tight tracking-tight">
+                시작 후에는 스쿨에서 바로 배웁니다.
+              </h2>
+              <p className="mt-3 text-[13px] leading-relaxed text-white/70">
+                첫 단체 후보 찾기, 첫 메시지, 단체몰 만들기까지 앱 안에서 순서대로 따라가도록 구성했습니다.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 border-t border-white/10">
+              <MiniSchool label="교육" value="4개" />
+              <MiniSchool label="미션" value="7개" />
+              <MiniSchool label="리워드" value="예정" />
             </div>
           </div>
         </section>
 
         <section className="px-5 py-5">
-          <div className="grid grid-cols-2 gap-2">
-            <Benefit icon="group" title="가까운 단체" desc="학과, 동호회, 학원, 매장" />
-            <Benefit icon="qr" title="전용 단체몰" desc="QR과 링크로 바로 주문" />
-            <Benefit icon="palette" title="디자인 지원" desc="로고와 시안 제작 흐름" />
-            <Benefit icon="gift" title="미션 리워드" desc="첫 단체몰까지 적립 예정" />
-          </div>
-        </section>
-
-        <section className="px-5">
-          <div className="rounded-[24px] bg-white p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="flex items-start justify-between gap-3 mb-5">
+          <div className="rounded-[24px] bg-white p-5 shadow-[0_16px_42px_rgba(18,31,54,0.11)]">
+            <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-extrabold text-[var(--color-brand-500)]">30초 지원</p>
-                <h2 className="text-[20px] font-black text-[var(--color-ink)] tracking-tight mt-1">
-                  파트너 지원하기
+                <p className="text-[11px] font-black text-[#ef2f24]">30초 상담 신청</p>
+                <h2 className="mt-1 text-[22px] font-black tracking-tight">
+                  딱 필요한 정보만 받을게요.
                 </h2>
               </div>
-              <span className="rounded-full bg-[var(--color-gold-soft)] px-3 py-1 text-[11px] font-extrabold text-[var(--color-gold-deep)]">
-                {potentialLabel}
+              <span className="rounded-full bg-[#fff2c7] px-3 py-1 text-[11px] font-black text-[#8a6200]">
+                {currentStep.eyebrow}
               </span>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Field label="이름" htmlFor="name" required>
-                <input
-                  id="name"
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="modoo-input"
-                  placeholder="홍길동"
-                />
-              </Field>
-              <Field label="연락처" htmlFor="phone" required>
-                <input
-                  id="phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="modoo-input"
-                  placeholder="010-1234-5678"
-                />
-              </Field>
-              <Field label="이메일" htmlFor="email" required>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="modoo-input"
-                  placeholder="example@email.com"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="활동 지역" htmlFor="region" required>
-                  <input
-                    id="region"
-                    type="text"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                    className="modoo-input"
-                    placeholder="서울 마포"
-                  />
-                </Field>
-                <Field label="활동 시간" htmlFor="time">
-                  <select
-                    id="time"
-                    value={activityTime}
-                    onChange={(e) => setActivityTime(e.target.value)}
-                    className="modoo-input"
-                  >
-                    <option>주 1~2시간</option>
-                    <option>주 3~5시간</option>
-                    <option>하루 1시간</option>
-                    <option>필요할 때 집중</option>
-                  </select>
-                </Field>
-              </div>
-              <Field label="가장 가까운 단체 유형" htmlFor="community">
-                <select
-                  id="community"
-                  value={communityType}
-                  onChange={(e) => setCommunityType(e.target.value)}
-                  className="modoo-input"
-                >
-                  <option>학교·학과</option>
-                  <option>동아리·동호회</option>
-                  <option>학원·스튜디오</option>
-                  <option>매장·프랜차이즈</option>
-                  <option>회사·팀</option>
-                  <option>교회·모임</option>
-                  <option>기타</option>
-                </select>
-              </Field>
-              <Field label="바로 연락 가능한 단체 수" htmlFor="groups" required>
-                <input
-                  id="groups"
-                  type="text"
-                  value={reachableGroups}
-                  onChange={(e) => setReachableGroups(e.target.value)}
-                  className="modoo-input"
-                  placeholder="예: 2곳, 학과 1곳과 동호회 1곳"
-                />
-              </Field>
-              <Field label="간단 소개" htmlFor="intro">
-                <textarea
-                  id="intro"
-                  value={intro}
-                  onChange={(e) => setIntro(e.target.value)}
-                  className="modoo-input min-h-[88px] resize-none"
-                  placeholder="현재 소속, 주변 단체, 활동 경험을 적어주세요."
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="비밀번호" htmlFor="pw" required>
-                  <input
-                    id="pw"
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="modoo-input"
-                    placeholder="8자 이상"
-                  />
-                </Field>
-                <Field label="비밀번호 확인" htmlFor="pw2" required>
-                  <input
-                    id="pw2"
-                    type="password"
-                    autoComplete="new-password"
-                    value={password2}
-                    onChange={(e) => setPassword2(e.target.value)}
-                    className="modoo-input"
-                    placeholder="재입력"
-                  />
-                </Field>
+            <div className="mb-5 h-2 overflow-hidden rounded-full bg-[#eef0f4]">
+              <div
+                className="h-full rounded-full bg-[#ef2f24] transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="min-h-[215px]">
+                <p className="text-[24px] font-black leading-tight tracking-tight">
+                  {currentStep.title}
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-[#667085]">
+                  {currentStep.desc}
+                </p>
+                <div className="mt-6">
+                  {step === 0 && (
+                    <div>
+                      <input
+                        value={region}
+                        onChange={(e) => setRegion(e.target.value)}
+                        className="modoo-apply-input"
+                        placeholder="예: 서울 마포구"
+                        autoFocus
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {REGION_EXAMPLES.map((example) => (
+                          <button
+                            key={example}
+                            type="button"
+                            onClick={() => setRegion(example)}
+                            className="rounded-full border border-[#e2e5eb] px-3 py-2 text-[12px] font-bold text-[#667085] active:bg-[#f6f7fb]"
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {step === 1 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {AGE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setAgeRange(option)}
+                          className={`rounded-[14px] border px-3 py-4 text-[15px] font-black transition-colors ${
+                            ageRange === option
+                              ? 'border-[#ef2f24] bg-[#fff0ee] text-[#ef2f24]'
+                              : 'border-[#e2e5eb] bg-white text-[#17191f] active:bg-[#f6f7fb]'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {step === 2 && (
+                    <input
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="modoo-apply-input"
+                      placeholder="예: 김모두"
+                      autoFocus
+                    />
+                  )}
+                  {step === 3 && (
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="modoo-apply-input"
+                      placeholder="010-0000-0000"
+                      inputMode="tel"
+                      type="tel"
+                      autoFocus
+                    />
+                  )}
+                </div>
               </div>
 
               {error && (
-                <div className="rounded-[12px] bg-[var(--color-err)]/10 border border-[var(--color-err)]/30 px-3 py-2 text-[12px] text-[var(--color-err)]">
+                <div className="mb-3 rounded-[12px] border border-[#ef2f24]/25 bg-[#fff0ee] px-3 py-2 text-[12px] font-bold text-[#d92a20]">
                   {error}
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full rounded-[16px] bg-[var(--color-brand-500)] px-3 py-4 text-white text-[15px] font-bold active:bg-[var(--color-brand-600)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                style={!submitting ? { boxShadow: 'var(--shadow-cta)' } : undefined}
-              >
-                {submitting ? '지원 접수 중...' : '파트너 지원하기'}
-              </button>
+              <div className="flex gap-2">
+                {step > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setStep((prev) => Math.max(prev - 1, 0));
+                    }}
+                    className="w-[92px] rounded-[16px] border border-[#e2e5eb] bg-white px-3 py-4 text-[14px] font-black text-[#667085] active:bg-[#f6f7fb]"
+                  >
+                    이전
+                  </button>
+                )}
+                {step < steps.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="flex-1 rounded-[16px] bg-[#ef2f24] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(239,47,36,0.24)] active:bg-[#d92a20]"
+                  >
+                    다음
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex-1 rounded-[16px] bg-[#ef2f24] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(239,47,36,0.24)] active:bg-[#d92a20] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? '신청 접수 중...' : '상담 신청 완료'}
+                  </button>
+                )}
+              </div>
             </form>
           </div>
         </section>
 
-        <p className="px-6 pt-5 text-[10px] leading-relaxed text-[var(--color-faint)]">
-          수수료와 리워드는 실제 결제 주문, 승인 상태, 정산 기준에 따라 달라질 수 있습니다.
+        <p className="px-6 text-[10px] leading-relaxed text-[#98a2b3]">
+          수익은 실제 결제 주문과 정산 기준에 따라 달라질 수 있습니다.
           <br />
-          모두의 유니폼 운영팀 승인 후 영업사원 앱 이용이 가능합니다.
+          초기비용 0원은 모두 파트너스 신청과 기본 교육 기준이며, 별도 유료 가입비를 받지 않는다는 의미입니다.
         </p>
       </main>
 
       <style jsx>{`
-        :global(.modoo-input) {
+        :global(.modoo-apply-input) {
           width: 100%;
-          border-radius: 12px;
-          border: 1px solid var(--color-hairline);
+          border-radius: 16px;
+          border: 1px solid #e2e5eb;
           background: #fff;
-          padding: 11px 12px;
-          font-size: 16px;
+          padding: 15px 16px;
+          font-size: 18px;
+          font-weight: 800;
+          color: #17191f;
           outline: none;
         }
-        :global(.modoo-input:focus) {
-          border-color: var(--color-brand-500);
-          box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.08);
+        :global(.modoo-apply-input::placeholder) {
+          color: #b7bdc7;
+        }
+        :global(.modoo-apply-input:focus) {
+          border-color: #ef2f24;
+          box-shadow: 0 0 0 4px rgba(239, 47, 36, 0.1);
         }
       `}</style>
     </div>
   );
 }
 
-function HeroMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[14px] bg-white/10 px-3 py-2">
-      <p className="text-[10px] text-white/55 font-bold">{label}</p>
-      <p className="text-[15px] text-white font-extrabold mt-0.5">{value}</p>
-    </div>
-  );
-}
-
-function Benefit({
-  icon,
-  title,
-  desc,
-}: {
-  icon: 'group' | 'qr' | 'palette' | 'gift';
-  title: string;
-  desc: string;
-}) {
-  return (
-    <div
-      className="rounded-[18px] bg-white p-4 min-h-[126px]"
-      style={{ border: '1px solid var(--color-hairline-soft)', boxShadow: 'var(--shadow-card-flat)' }}
-    >
-      <div className="w-10 h-10 rounded-[13px] bg-[var(--color-brand-100)] flex items-center justify-center mb-3">
-        <Icon name={icon} size={21} color="var(--color-brand-500)" strokeWidth={2} />
-      </div>
-      <p className="text-[14px] font-extrabold text-[var(--color-ink)] tracking-tight">{title}</p>
-      <p className="text-[11px] leading-relaxed text-[var(--color-muted)] mt-1">{desc}</p>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  htmlFor,
-  required,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
+function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div>
-      <label
-        className="block text-[11px] font-bold text-[var(--color-muted)] mb-1.5"
-        htmlFor={htmlFor}
-      >
-        {label}
-        {required ? <span className="text-[var(--color-err)]"> *</span> : null}
-      </label>
-      {children}
+      <p className="text-[11px] font-black text-[#ef2f24]">{eyebrow}</p>
+      <h2 className="mt-1 text-[23px] font-black leading-tight tracking-tight text-[#17191f]">{title}</h2>
+    </div>
+  );
+}
+
+function HeroMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[14px] bg-[#f6f7fb] px-3 py-2">
+      <p className="text-[10px] font-bold text-[#667085]">{label}</p>
+      <p className="mt-0.5 text-[15px] font-black text-[#17191f]">{value}</p>
+    </div>
+  );
+}
+
+function FlowCard({
+  step,
+  title,
+  desc,
+  icon,
+}: {
+  step: string;
+  title: string;
+  desc: string;
+  icon: 'group' | 'qr' | 'wallet';
+}) {
+  return (
+    <div className="flex gap-3 rounded-[20px] bg-white p-4 shadow-[0_8px_24px_rgba(18,31,54,0.07)]">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[16px] bg-[#fff0ee]">
+        <Icon name={icon} size={22} color="#ef2f24" strokeWidth={2.2} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black text-[#ef2f24]">{step}</p>
+        <p className="mt-0.5 text-[15px] font-black tracking-tight text-[#17191f]">{title}</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-[#667085]">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+function FitCard({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="min-h-[116px] rounded-[18px] bg-[#f6f7fb] p-4">
+      <p className="text-[14px] font-black leading-tight tracking-tight text-[#17191f]">{title}</p>
+      <p className="mt-2 text-[11px] leading-relaxed text-[#667085]">{desc}</p>
+    </div>
+  );
+}
+
+function MiniSchool({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="p-4 text-center">
+      <p className="text-[10px] font-bold text-white/45">{label}</p>
+      <p className="mt-1 text-[16px] font-black">{value}</p>
     </div>
   );
 }

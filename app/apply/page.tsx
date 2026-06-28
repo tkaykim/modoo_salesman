@@ -111,10 +111,10 @@ export default function ApplyPage() {
     return (
       <div className="min-h-[100dvh] bg-[#f6f7fb] px-5 py-8 flex items-center justify-center">
         <div className="w-full max-w-sm rounded-[24px] bg-white p-6 text-center shadow-[0_18px_46px_rgba(18,31,54,0.12)]">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[20px] bg-[#ef2f24] shadow-[0_10px_24px_rgba(239,47,36,0.25)]">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[20px] bg-[#0052cc] shadow-[0_10px_24px_rgba(0,82,204,0.25)]">
             <Icon name="check" size={28} color="white" strokeWidth={2.4} />
           </div>
-          <p className="mb-2 text-[11px] font-black text-[#ef2f24]">MODOO PARTNERS</p>
+          <p className="mb-2 text-[11px] font-black text-[#0052cc]">MODOO PARTNERS</p>
           <h1 className="mb-2 text-[22px] font-black tracking-tight text-[#17191f]">
             상담 신청이 완료되었습니다
           </h1>
@@ -132,7 +132,7 @@ export default function ApplyPage() {
           <Link
             href="/login"
             prefetch={false}
-            className="mt-5 flex w-full items-center justify-center rounded-[16px] bg-[#ef2f24] px-4 py-3.5 text-[14px] font-black text-white active:bg-[#d92a20]"
+            className="mt-5 flex w-full items-center justify-center rounded-[16px] bg-[#0052cc] px-4 py-3.5 text-[14px] font-black text-white active:bg-[#003f9e]"
           >
             기존 파트너 로그인
           </Link>
@@ -155,7 +155,7 @@ export default function ApplyPage() {
         >
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#ef2f24]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#0052cc]">
                 <Icon name="trophy" size={20} color="white" strokeWidth={2.2} />
               </div>
               <div>
@@ -188,7 +188,7 @@ export default function ApplyPage() {
           <div className="relative z-10 mt-8 rounded-[18px] bg-white p-4 text-[#17191f] shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-black text-[#ef2f24]">예상 수익 방식</p>
+                <p className="text-[11px] font-black text-[#0052cc]">예상 수익 방식</p>
                 <p className="mt-1 text-[24px] font-black tracking-tight">
                   주문 매출 기준 수수료
                 </p>
@@ -251,7 +251,7 @@ export default function ApplyPage() {
           <div className="rounded-[24px] bg-white p-5 shadow-[0_16px_42px_rgba(18,31,54,0.11)]">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-black text-[#ef2f24]">30초 상담 신청</p>
+                <p className="text-[11px] font-black text-[#0052cc]">30초 상담 신청</p>
                 <h2 className="mt-1 text-[22px] font-black tracking-tight">
                   딱 필요한 정보만 받을게요.
                 </h2>
@@ -263,7 +263,7 @@ export default function ApplyPage() {
 
             <div className="mb-5 h-2 overflow-hidden rounded-full bg-[#eef0f4]">
               <div
-                className="h-full rounded-full bg-[#ef2f24] transition-all duration-300"
+                className="h-full rounded-full bg-[#0052cc] transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -309,7 +309,7 @@ export default function ApplyPage() {
                           onClick={() => setAgeRange(option)}
                           className={`rounded-[14px] border px-3 py-4 text-[15px] font-black transition-colors ${
                             ageRange === option
-                              ? 'border-[#ef2f24] bg-[#fff0ee] text-[#ef2f24]'
+                              ? 'border-[#0052cc] bg-[#eaf2ff] text-[#0052cc]'
                               : 'border-[#e2e5eb] bg-white text-[#17191f] active:bg-[#f6f7fb]'
                           }`}
                         >
@@ -342,7 +342,7 @@ export default function ApplyPage() {
               </div>
 
               {error && (
-                <div className="mb-3 rounded-[12px] border border-[#ef2f24]/25 bg-[#fff0ee] px-3 py-2 text-[12px] font-bold text-[#d92a20]">
+                <div className="mb-3 rounded-[12px] border border-[#0052cc]/25 bg-[#eaf2ff] px-3 py-2 text-[12px] font-bold text-[#003f9e]">
                   {error}
                 </div>
               )}
@@ -364,7 +364,7 @@ export default function ApplyPage() {
                   <button
                     type="button"
                     onClick={goNext}
-                    className="flex-1 rounded-[16px] bg-[#ef2f24] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(239,47,36,0.24)] active:bg-[#d92a20]"
+                    className="flex-1 rounded-[16px] bg-[#0052cc] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(0,82,204,0.24)] active:bg-[#003f9e]"
                   >
                     다음
                   </button>
@@ -372,7 +372,7 @@ export default function ApplyPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 rounded-[16px] bg-[#ef2f24] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(239,47,36,0.24)] active:bg-[#d92a20] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 rounded-[16px] bg-[#0052cc] px-3 py-4 text-[15px] font-black text-white shadow-[0_12px_24px_rgba(0,82,204,0.24)] active:bg-[#003f9e] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting ? '신청 접수 중...' : '상담 신청 완료'}
                   </button>
@@ -405,8 +405,8 @@ export default function ApplyPage() {
           color: #b7bdc7;
         }
         :global(.modoo-apply-input:focus) {
-          border-color: #ef2f24;
-          box-shadow: 0 0 0 4px rgba(239, 47, 36, 0.1);
+          border-color: #0052cc;
+          box-shadow: 0 0 0 4px rgba(0, 82, 204, 0.1);
         }
       `}</style>
     </div>
@@ -416,7 +416,7 @@ export default function ApplyPage() {
 function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div>
-      <p className="text-[11px] font-black text-[#ef2f24]">{eyebrow}</p>
+      <p className="text-[11px] font-black text-[#0052cc]">{eyebrow}</p>
       <h2 className="mt-1 text-[23px] font-black leading-tight tracking-tight text-[#17191f]">{title}</h2>
     </div>
   );
@@ -444,11 +444,11 @@ function FlowCard({
 }) {
   return (
     <div className="flex gap-3 rounded-[20px] bg-white p-4 shadow-[0_8px_24px_rgba(18,31,54,0.07)]">
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[16px] bg-[#fff0ee]">
-        <Icon name={icon} size={22} color="#ef2f24" strokeWidth={2.2} />
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[16px] bg-[#eaf2ff]">
+        <Icon name={icon} size={22} color="#0052cc" strokeWidth={2.2} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-black text-[#ef2f24]">{step}</p>
+        <p className="text-[10px] font-black text-[#0052cc]">{step}</p>
         <p className="mt-0.5 text-[15px] font-black tracking-tight text-[#17191f]">{title}</p>
         <p className="mt-1 text-[12px] leading-relaxed text-[#667085]">{desc}</p>
       </div>

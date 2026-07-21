@@ -116,5 +116,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `신청 처리 실패: ${insertErr.message}` }, { status: 500 });
   }
 
+  // 4) 운영 알림 — 신청이 DB에만 쌓이고 아무도 모르는 사고 방지 (2026-07-21).
+  // 알림 실패가 신청 성공을 막으면 안 되므로 fire-and-forget.
+  await notifyNewApplication({ displayName, phone: phoneDigits, region, ageRange });
+
   return NextResponse.json({ ok: true }, { status: 201 });
+}
+
+async function notifyNewApplication(app: {
+  displayName: string;
+  phone: string;
+  region: string;
+  ageRange: string;
+}) {
+  const webhook = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhook) return;
+  const content = [
+    '🔔 **모두 파트너스 신규 상담 신청**',
+    `이름: ${app.displayName}`,
+    `연락처: ${app.phone}`,
+    `지역: ${app.region} / 나이대: ${app.ageRange}`,
+    '상태: pending — modoo_admin 영업사원 화면에서 승인 필요. 상담 연락 바랍니다.',
+  ].join('\n');
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    console.error('[apply] notify failed:', err);
+  }
 }
